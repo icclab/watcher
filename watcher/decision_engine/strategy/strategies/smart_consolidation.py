@@ -16,6 +16,9 @@
 from oslo_log import log
 
 from watcher.decision_engine.strategy.strategies import base
+from watcher.decision_engine.model import resource
+from watcher.metrics_engine.cluster_history import ceilometer \
+    as ceilometer_cluster_history
 
 from copy import deepcopy
 
@@ -29,6 +32,8 @@ class SmartStrategy(base.BaseStrategy):
     def __init__(self, name=DEFAULT_NAME, description=DEFAULT_DESCRIPTION,
                  osc=None):
         super(SmartStrategy, self).__init__(name, description, osc)
+        self._ceilometer = \
+            ceilometer_cluster_history.CeilometerClusterHistory(osc=self.osc)
 
     def add_migration(self, vm, src_hypervisor,
                       dst_hypervisor, model):
@@ -42,23 +47,114 @@ class SmartStrategy(base.BaseStrategy):
                                  resource_id=vm.uuid,
                                  input_parameters=params)
 
-    def get_prediction_model(self, model):
+    @staticmethod
+    def get_prediction_model(model):
         return deepcopy(model)
 
-    def get_vm_utilization(self, vm, model):
+    def get_vm_utilization(self, vm, model, period=3600, aggr='avg'):
         # TODO (gaea)
-        # return {'cpu': cpu, 'ram': ram, 'disk': disk}
-        pass
+        """
+        Collect cpu, ram and disk utilization statistics of a virtual machine
+        :param vm: vm object
+        :param model:
+        :param period: seconds
+        :param aggr: string
+        :return: dict(cpu(number of vcpus used), ram(MB used), disk(B used))
+        """
+        cpu_util_metric = 'cpu_util'
+        ram_util_metric = 'memory.usage'
+        disk_util_metric = 'disk.usage'
+        vm_cpu_util = \
+            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+                                                   meter_name=cpu_util_metric,
+                                                   period=period,
+                                                   aggregate=aggr)
+        vm_cpu_cores = model.get_resource_from_id(
+                resource.ResourceType.cpu_cores).get_capacity(vm)
+        total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
 
-    def get_hypervisor_utilization(self, hypervisor, model):
-        # TODO (gaea)
-        # return {'cpu': cpu, 'ram': ram, 'disk': disk}
-        pass
+        vm_ram_util = \
+            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+                                                   meter_name=ram_util_metric,
+                                                   period=period,
+                                                   aggregate=aggr)
 
-    def get_hypervisor_capacity(self, hypervisor, model):
+        vm_disk_util = \
+            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+                                                   meter_name=disk_util_metric,
+                                                   period=period,
+                                                   aggregate=aggr)
+        return dict(cpu=total_cpu_utilization, ram=vm_ram_util,
+                    disk=vm_disk_util)
+
+    def get_hypervisor_utilization(self, hypervisor, model, period=3600,
+                                   aggr='avg'):
         # TODO (gaea)
-        # return {'cpu': cpu, 'ram': ram, 'disk': disk}
-        pass
+        """
+        Collect cpu, ram and disk utilization statistics of a hypervisor
+        :param hypervisor: hypervisor object
+        :param model:
+        :param period: seconds
+        :param aggr: string
+        :return: dict(cpu(number of cores used), ram(MB used), disk(B used))
+        """
+        cpu_util_metric = 'compute.node.cpu.percent'
+        ram_util_metric = 'memory.usage'
+        disk_util_metric = 'disk.usage'
+        resource_id = "%s_%s" % (hypervisor.uuid, hypervisor.hostname)
+        hypervisor_cpu_util = \
+            self._ceilometer.statistic_aggregation(resource_id=resource_id,
+                                                   meter_name=cpu_util_metric,
+                                                   period=period,
+                                                   aggregate=aggr)
+        hypervisor_cpu_cores = model.get_resource_from_id(
+            resource.ResourceType.cpu_cores).get_capacity(hypervisor)
+        total_cpu_utilization = hypervisor_cpu_cores * \
+            (hypervisor_cpu_util / 100.0)
+
+        hypervisor_vms = \
+            map(lambda vm: vm.uuid,
+                model.get_mapping().get_node_vms_from_id(hypervisor.uuid))
+
+        hypervisor_ram_util = sum(map(lambda uuid:
+                                      self._ceilometer.statistic_aggregation(
+                                          resource_id=uuid,
+                                          meter_name=ram_util_metric,
+                                          period=period,
+                                          aggregate=aggr),
+                                      hypervisor_vms))
+
+        hypervisor_disk_util = sum(map(lambda uuid:
+                                       self._ceilometer.statistic_aggregation(
+                                           resource_id=uuid,
+                                           meter_name=disk_util_metric,
+                                           period=period,
+                                           aggregate=aggr),
+                                       hypervisor_vms))
+
+        return dict(cpu=total_cpu_utilization, ram=hypervisor_ram_util,
+                    disk=hypervisor_disk_util)
+
+    @staticmethod
+    def get_hypervisor_capacity(hypervisor, model):
+        # TODO (gaea)
+        """
+        Collect cpu, ram and disk capacity of a hypervisor
+        :param hypervisor: hypervisor object
+        :param model:
+        :return: dict(cpu(cores), ram(MB), disk(B))
+        """
+        hypervisor_cpu_capacity = model.get_resource_from_id(
+            resource.ResourceType.cpu_cores).get_capacity(hypervisor)
+
+        # TODO - Check output of disk capacity (MB or B)
+        hypervisor_disk_capacity = model.get_resource_from_id(
+            resource.ResourceType.disk).get_capacity(hypervisor)
+
+        hypervisor_ram_capacity = model.get_resource_from_id(
+            resource.ResourceType.memory).get_capacity(hypervisor)
+        return dict(cpu=hypervisor_cpu_capacity, ram=hypervisor_ram_capacity,
+                    disk=hypervisor_disk_capacity)
 
     def is_overloaded(self, hypervisor, model):
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
