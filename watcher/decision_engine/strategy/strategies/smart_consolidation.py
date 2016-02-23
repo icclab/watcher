@@ -47,8 +47,7 @@ class SmartStrategy(base.BaseStrategy):
                                  resource_id=vm.uuid,
                                  input_parameters=params)
 
-    @staticmethod
-    def get_prediction_model(model):
+    def get_prediction_model(self, model):
         return deepcopy(model)
 
     def get_vm_utilization(self, vm, model, period=3600, aggr='avg'):
@@ -135,8 +134,7 @@ class SmartStrategy(base.BaseStrategy):
         return dict(cpu=total_cpu_utilization, ram=hypervisor_ram_util,
                     disk=hypervisor_disk_util)
 
-    @staticmethod
-    def get_hypervisor_capacity(hypervisor, model):
+    def get_hypervisor_capacity(self, hypervisor, model):
         # TODO (gaea)
         """
         Collect cpu, ram and disk capacity of a hypervisor
