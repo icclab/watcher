@@ -15,6 +15,7 @@
 #
 from oslo_log import log
 
+from watcher.decision_engine.model import hypervisor_state as hyper_state
 from watcher.decision_engine.strategy.strategies import base
 from watcher.decision_engine.model import resource
 from watcher.metrics_engine.cluster_history import ceilometer \
@@ -43,9 +44,15 @@ class SmartStrategy(base.BaseStrategy):
         params = {'migration_type': migration_type,
                   'src_hypervisor': src_hypervisor,
                   'dst_hypervisor': dst_hypervisor}
-        self.solution.add_action(action_type=self.MIGRATION,
+        self.solution.add_action(action_type='migrate',
                                  resource_id=vm.uuid,
                                  input_parameters=params)
+        if len(model.get_mapping().get_node_vms_from_id(
+                src_hypervisor.uuid)) == 0:
+            parameters = {'state': hyper_state.HypervisorState.OFFLINE.value}
+            self.solution.add_action(action_type='change_nova_service_state',
+                                     resource_id=src_hypervisor.uuid,
+                                     parameters=parameters)
 
     def get_prediction_model(self, model):
         return deepcopy(model)
@@ -69,7 +76,7 @@ class SmartStrategy(base.BaseStrategy):
                                                    period=period,
                                                    aggregate=aggr)
         vm_cpu_cores = model.get_resource_from_id(
-                resource.ResourceType.cpu_cores).get_capacity(vm)
+            resource.ResourceType.cpu_cores).get_capacity(vm)
         total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
 
         vm_ram_util = \
