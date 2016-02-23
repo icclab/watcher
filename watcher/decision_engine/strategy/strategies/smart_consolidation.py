@@ -101,12 +101,8 @@ class SmartStrategy(base.BaseStrategy):
                         vm, model)['cpu']):
                     for dst_hypervisor in sorted_hypervisors:
                         if self.vm_fits(vm, dst_hypervisor, model):
-<<<<<<< HEAD
                             self.add_migration(vm, hypervisor,
                                                dst_hypervisor, model)
-=======
-                            self.add_migration(vm, hypervisor, dst_hypervisor)
->>>>>>> a3e4b5455ee585c2b6da1188bf7a3f02d4059218
                             break
                     if not self.is_overloaded(hypervisor, model):
                         break
@@ -134,19 +130,12 @@ class SmartStrategy(base.BaseStrategy):
                 dsc = len(sorted_hypervisors) - 1
                 for dst_hypervisor in reversed(sorted_hypervisors):
                     if self.vm_fits(vm, dst_hypervisor, model):
-<<<<<<< HEAD
                         self.add_migration(vm, hypervisor,
                                            dst_hypervisor, model)
                     dsc -= 1
                     if asc >= dsc:
                         break
             asc += 1
-=======
-                        self.add_migration(vm, hypervisor, dst_hypervisor)
-                    dsc = dsc - 1
-                    if asc >= dsc:
-                        break
->>>>>>> a3e4b5455ee585c2b6da1188bf7a3f02d4059218
 
     def execute(self, original_model):
         LOG.info("Executing Smart Strategy")
