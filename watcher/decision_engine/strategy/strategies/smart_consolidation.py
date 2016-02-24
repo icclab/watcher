@@ -47,12 +47,17 @@ class SmartStrategy(base.BaseStrategy):
         self.solution.add_action(action_type='migrate',
                                  resource_id=vm.uuid,
                                  input_parameters=params)
-        if len(model.get_mapping().get_node_vms_from_id(
-                src_hypervisor.uuid)) == 0:
-            parameters = {'state': hyper_state.HypervisorState.OFFLINE.value}
-            self.solution.add_action(action_type='change_nova_service_state',
-                                     resource_id=src_hypervisor.uuid,
-                                     parameters=parameters)
+
+    def deactivate_unused_hypervisors(self, model):
+        for hypervisor in model.get_all_hypervisors():
+            if len(model.get_mapping().get_node_vms_from_id(
+                    hypervisor.uuid)) == 0:
+                parameters = \
+                    {'state': hyper_state.HypervisorState.OFFLINE.value}
+                self.solution.add_action(
+                    action_type='change_nova_service_state',
+                    resource_id=hypervisor.uuid,
+                    parameters=parameters)
 
     def get_prediction_model(self, model):
         return deepcopy(model)
@@ -247,5 +252,8 @@ class SmartStrategy(base.BaseStrategy):
 
         # Consolidation phase
         self.consolidation_phase(model)
+
+        # Deactivate unused hypervisors
+        self.deactivate_unused_hypervisors()
 
         return self.solution
