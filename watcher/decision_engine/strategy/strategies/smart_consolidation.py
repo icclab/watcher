@@ -194,7 +194,16 @@ class SmartStrategy(base.BaseStrategy):
         overloaded hypervisors. This is done in a fashion of moving
         the least CPU utilized VM first as live migration these
         generaly causes less troubles.
-        '''
+        
+         * TODO (cima) The curent implementation doesn't consider
+         hypervisors' states. Offloading phase should be able to
+         active turned off hypervisors (if available) in a case
+         of the resource capacity provided by activated hypervisors
+         is not able to accomodate all the load. As the offload phase
+         is later followed by the consolidation phase, the hypervisor
+         activation in this doesn't necessarily results in more activated
+         hypervisors in the final solution.  
+         '''
 
         sorted_hypervisors = sorted(
             model.get_all_hypervisors(),
