@@ -194,7 +194,7 @@ class SmartStrategy(base.BaseStrategy):
         overloaded hypervisors. This is done in a fashion of moving
         the least CPU utilized VM first as live migration these
         generaly causes less troubles.
-        
+
          * TODO (cima) The curent implementation doesn't consider
          hypervisors' states. Offloading phase should be able to
          active turned off hypervisors (if available) in a case
@@ -202,8 +202,8 @@ class SmartStrategy(base.BaseStrategy):
          is not able to accomodate all the load. As the offload phase
          is later followed by the consolidation phase, the hypervisor
          activation in this doesn't necessarily results in more activated
-         hypervisors in the final solution.  
-         '''
+         hypervisors in the final solution.
+        '''
 
         sorted_hypervisors = sorted(
             model.get_all_hypervisors(),
@@ -255,6 +255,20 @@ class SmartStrategy(base.BaseStrategy):
     def execute(self, original_model):
         LOG.info("Executing Smart Strategy")
         model = self.get_prediction_model(original_model)
+
+        '''
+        * TODO (cima) Both phases optimise the model with regards to
+        hypervisor capacity. An additional capacity coefficient might
+        be used to set up the capacity threshold relatively.
+        Setting up different coefficient values in both phases may
+        lead to to more efficient consolidation in the end.
+        e.g. If targetted utilization is 80% of hypervisor capacity,
+        the coefficient in the consolidation phase will be 0.8, but
+        may any lower value in the offloading phase. The lower it gets
+        the cluster will appear more 'released' (distributed) for the
+        following consolidation phase.
+        This is just an idea and it needs to be ellaborated further.
+        '''
 
         # Offloading phase
         self.offload_phase(model)
