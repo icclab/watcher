@@ -49,20 +49,19 @@ class SmartStrategy(base.BaseStrategy):
                                  input_parameters=params)
 
     def deactivate_unused_hypervisors(self, model):
-        for hypervisor in model.get_all_hypervisors():
-            if len(model.get_mapping().get_node_vms_from_id(
-                    hypervisor.uuid)) == 0:
-                parameters = \
+        for hypervisor in model.get_all_hypervisors().values():
+            if len(model.get_mapping().get_node_vms(hypervisor)) == 0:
+                params = \
                     {'state': hyper_state.HypervisorState.OFFLINE.value}
                 self.solution.add_action(
                     action_type='change_nova_service_state',
                     resource_id=hypervisor.uuid,
-                    parameters=parameters)
+                    input_parameters=params)
 
     def get_prediction_model(self, model):
         return deepcopy(model)
 
-    def get_vm_utilization(self, vm, model, period=3600, aggr='avg'):
+    def get_vm_utilization(self, vm_uuid, model, period=3600, aggr='avg'):
         # TODO (gaea)
         """
         Collect cpu, ram and disk utilization statistics of a virtual machine
@@ -76,22 +75,22 @@ class SmartStrategy(base.BaseStrategy):
         ram_util_metric = 'memory.usage'
         disk_util_metric = 'disk.usage'
         vm_cpu_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
                                                    meter_name=cpu_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
         vm_cpu_cores = model.get_resource_from_id(
-            resource.ResourceType.cpu_cores).get_capacity(vm)
+            resource.ResourceType.cpu_cores).get_capacity(model.get_vm_from_id(vm_uuid))
         total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
 
         vm_ram_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
                                                    meter_name=ram_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
 
         vm_disk_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm.uuid,
+            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
                                                    meter_name=disk_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
@@ -124,20 +123,19 @@ class SmartStrategy(base.BaseStrategy):
             (hypervisor_cpu_util / 100.0)
 
         hypervisor_vms = \
-            map(lambda vm: vm.uuid,
-                model.get_mapping().get_node_vms_from_id(hypervisor.uuid))
+            model.get_mapping().get_node_vms_from_id(hypervisor.uuid)
 
-        hypervisor_ram_util = sum(map(lambda uuid:
+        hypervisor_ram_util = sum(map(lambda vm_uuid:
                                       self._ceilometer.statistic_aggregation(
-                                          resource_id=uuid,
+                                          resource_id=vm_uuid,
                                           meter_name=ram_util_metric,
                                           period=period,
                                           aggregate=aggr),
                                       hypervisor_vms))
 
-        hypervisor_disk_util = sum(map(lambda uuid:
+        hypervisor_disk_util = sum(map(lambda vm_uuid:
                                        self._ceilometer.statistic_aggregation(
-                                           resource_id=uuid,
+                                           resource_id=vm_uuid,
                                            meter_name=disk_util_metric,
                                            period=period,
                                            aggregate=aggr),
@@ -176,11 +174,11 @@ class SmartStrategy(base.BaseStrategy):
                 return True
         return False
 
-    def vm_fits(self, vm, hypervisor, model):
+    def vm_fits(self, vm_uuid, hypervisor, model):
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
             hypervisor, model)
-        vm_utilization = self.get_vm_utilization(vm, model)
+        vm_utilization = self.get_vm_utilization(vm_uuid, model)
         metrics = ['cpu', 'ram', 'disk']
         for m in metrics:
             if vm_utilization[m] + \
@@ -206,14 +204,13 @@ class SmartStrategy(base.BaseStrategy):
         '''
 
         sorted_hypervisors = sorted(
-            model.get_all_hypervisors(),
+            model.get_all_hypervisors().values(),
             key=lambda x: self.get_hypervisor_utilization(x, model)['cpu'])
         for hypervisor in reversed(sorted_hypervisors):
             if self.is_overloaded(hypervisor, model):
-                for vm in sorted(model.get_mapping().get_node_vms_from_id(
-                        hypervisor.uuid),
-                        key=lambda x: self.get_vm_utilization(
-                        vm, model)['cpu']):
+                for vm in sorted(model.get_mapping().get_node_vms(hypervisor),
+                                 key=lambda x: self.get_vm_utilization(
+                        x, model)['cpu']):
                     for dst_hypervisor in sorted_hypervisors:
                         if self.vm_fits(vm, dst_hypervisor, model):
                             self.add_migration(vm, hypervisor,
@@ -234,14 +231,14 @@ class SmartStrategy(base.BaseStrategy):
         '''
 
         sorted_hypervisors = sorted(
-            model.get_all_hypervisors(),
+            model.get_all_hypervisors().values(),
             key=lambda x: self.get_hypervisor_utilization(x, model)['cpu'])
         asc = 0
         for hypervisor in sorted_hypervisors:
-            for vm in sorted(model.get_mapping().get_node_vms_from_id(
-                    hypervisor.uuid),
-                    key=lambda x: self.get_vm_utilization(vm, model)['cpu'],
-                    reverse=True):
+            for vm in sorted(model.get_mapping().get_node_vms(hypervisor),
+                             key=lambda x: self.get_vm_utilization(
+                             x, model)['cpu'],
+                             reverse=True):
                 dsc = len(sorted_hypervisors) - 1
                 for dst_hypervisor in reversed(sorted_hypervisors):
                     if self.vm_fits(vm, dst_hypervisor, model):
@@ -277,6 +274,6 @@ class SmartStrategy(base.BaseStrategy):
         self.consolidation_phase(model)
 
         # Deactivate unused hypervisors
-        self.deactivate_unused_hypervisors()
+        self.deactivate_unused_hypervisors(model)
 
         return self.solution
