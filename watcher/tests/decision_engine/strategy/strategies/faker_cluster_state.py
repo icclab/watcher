@@ -235,3 +235,56 @@ class FakerModelCollector(api.BaseClusterModelCollector):
             current_state_cluster.get_vm_from_id("VM_0"))
 
         return current_state_cluster
+
+
+class FakerModelCollector2(api.BaseClusterModelCollector):
+
+    def __init__(self):
+        pass
+
+    def generate_scenario_1(self):
+        '''
+        Simulates a cluster with 2 hypervisors and
+        2 VMs using 1:1 mapping
+        '''
+        current_state_cluster = modelroot.ModelRoot()
+        count_node = 2
+        count_vm = 2
+
+        mem = resource.Resource(resource.ResourceType.memory)
+        num_cores = resource.Resource(resource.ResourceType.cpu_cores)
+        disk = resource.Resource(resource.ResourceType.disk)
+
+        current_state_cluster.create_resource(mem)
+        current_state_cluster.create_resource(num_cores)
+        current_state_cluster.create_resource(disk)
+
+        for i in range(0, count_node):
+            node_uuid = "Node_{0}".format(i)
+            node = hypervisor.Hypervisor()
+            node.uuid = node_uuid
+            node.hostname = "hostname_{0}".format(i)
+
+            mem.set_capacity(node, 64)
+            disk.set_capacity(node, 250)
+            num_cores.set_capacity(node, 40)
+            current_state_cluster.add_hypervisor(node)
+
+        for i in range(0, count_vm):
+            vm_uuid = "VM_{0}".format(i)
+            vm = modelvm.VM()
+            vm.uuid = vm_uuid
+            mem.set_capacity(vm, 2)
+            disk.set_capacity(vm, 20)
+            num_cores.set_capacity(vm, 10)
+            current_state_cluster.add_vm(vm)
+
+        current_state_cluster.get_mapping().map(
+            current_state_cluster.get_hypervisor_from_id("Node_0"),
+            current_state_cluster.get_vm_from_id("VM_0"))
+
+        current_state_cluster.get_mapping().map(
+            current_state_cluster.get_hypervisor_from_id("Node_0"),
+            current_state_cluster.get_vm_from_id("VM_1"))
+
+        return current_state_cluster
