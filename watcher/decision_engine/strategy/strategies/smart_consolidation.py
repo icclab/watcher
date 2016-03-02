@@ -35,6 +35,8 @@ class SmartStrategy(base.BaseStrategy):
         super(SmartStrategy, self).__init__(name, description, osc)
         self._ceilometer = \
             ceilometer_cluster_history.CeilometerClusterHistory(osc=self.osc)
+        self.number_of_migrations = 0
+        self.number_of_released_hypervisors = 0
 
     def add_migration(self, vm, src_hypervisor,
                       dst_hypervisor, model):
@@ -47,6 +49,7 @@ class SmartStrategy(base.BaseStrategy):
         self.solution.add_action(action_type='migrate',
                                  resource_id=vm.uuid,
                                  input_parameters=params)
+        self.number_of_migrations += 1
 
     def deactivate_unused_hypervisors(self, model):
         for hypervisor in model.get_all_hypervisors().values():
@@ -57,6 +60,7 @@ class SmartStrategy(base.BaseStrategy):
                     action_type='change_nova_service_state',
                     resource_id=hypervisor.uuid,
                     input_parameters=params)
+                self.number_of_released_hypervisors += 1
 
     def get_prediction_model(self, model):
         return deepcopy(model)
@@ -164,6 +168,33 @@ class SmartStrategy(base.BaseStrategy):
         return dict(cpu=hypervisor_cpu_capacity, ram=hypervisor_ram_capacity,
                     disk=hypervisor_disk_capacity)
 
+    def get_relative_hypervisor_utilization(self, hypervisor, model):
+        rhu = {}
+        util = self.get_hypervisor_utilization(hypervisor, model)
+        cap = self.get_hypervisor_capacity(hypervisor, model)
+        for k in util.keys():
+            rhu[k] = util[k] / cap[k]
+        return rhu
+
+    def get_relative_cluster_utilization(self, model):
+        hypervisors = model.get_all_hypervisors().values()
+        rcu = {}
+        counters = {}
+        for hypervisor in hypervisors:
+            if hypervisor.state == hyper_state.HypervisorState.ONLINE:
+                rhu = self.get_relative_hypervisor_utilization(hypervisor,
+                                                               model)
+                for k in rhu.keys():
+                    if k not in rcu:
+                        rcu[k] = 0
+                    if k not in counters:
+                        counters[k] = 0
+                    rcu[k] += rhu[k]
+                    counters[k] += 1
+        for k in rcu.keys():
+            rcu[k] /= counters[k]
+        return rcu
+
     def is_overloaded(self, hypervisor, model):
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
@@ -252,6 +283,7 @@ class SmartStrategy(base.BaseStrategy):
     def execute(self, original_model):
         LOG.info("Executing Smart Strategy")
         model = self.get_prediction_model(original_model)
+        cru = self.get_cluster_relative_utilization(model)
 
         '''
         * TODO (cima) Both phases optimise the model with regards to
@@ -275,5 +307,19 @@ class SmartStrategy(base.BaseStrategy):
 
         # Deactivate unused hypervisors
         self.deactivate_unused_hypervisors(model)
+
+        cru_after = self.get_cluster_relative_utilization(model)
+        info = {
+            'number_of_migrations': self.number_of_migrations,
+            'number_of_released_hypervisors':
+                self.number_of_released_hypervisors,
+            'relative_cluster_utilization_before': str(cru),
+            'relative_cluster_utilization_after': str(cru_after)
+        }
+
+        LOG.debug(info)
+
+        self.solution.model = model
+        self.solution.efficacy = cru_after['cpu']
 
         return self.solution
