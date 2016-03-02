@@ -172,70 +172,68 @@ class FakerMetricsCollector(object):
     def get_average_network_outcomming(self, node):
         pass
 
-    class FakeCeilometerMetrics(object):
-        def __init__(self):
-            pass
 
-        def mock_get_statistics(self, resource_id, meter_name, period=3600,
-                            aggregate='avg'):
-            if meter_name == "compute.node.cpu.percent":
-                return self.get_hypervisor_cpu_util(resource_id)
-            elif meter_name == "cpu_util":
-                return self.get_vm_cpu_util(resource_id)
-            elif meter_name == "memory.usage":
-                return self.get_vm_ram_util(resource_id)
-            elif meter_name == "disk.usage":
-                return self.get_vm_disk_util(resource_id)
+class FakeCeilometerMetrics:
+    def __init__(self):
+        pass
 
-        def get_hypervisor_cpu_util(self, r_id):
-            h_cpu_util = dict()
-            h_cpu_util['Node_0_hostname_0'] = 15
-            h_cpu_util['Node_1_hostname_1'] = 5
-            h_cpu_util['Node_2_hostname_2'] = 20
+    def mock_get_statistics(self, resource_id, meter_name, period=3600,
+                           aggregate='avg'):
+        if meter_name == "compute.node.cpu.percent":
+            return self.get_hypervisor_cpu_util(resource_id)
+        elif meter_name == "cpu_util":
+            return self.get_vm_cpu_util(resource_id)
+        elif meter_name == "memory.usage":
+            return self.get_vm_ram_util(resource_id)
+        elif meter_name == "disk.usage":
+            return self.get_vm_disk_util(resource_id)
 
-            return h_cpu_util[str(r_id)]
+    def get_hypervisor_cpu_util(self, r_id):
+        h_cpu_util = dict()
+        h_cpu_util['Node_0_hostname_0'] = 15
+        h_cpu_util['Node_1_hostname_1'] = 5
+        h_cpu_util['Node_2_hostname_2'] = 20
+        return h_cpu_util[str(r_id)]
 
-        def get_hypervisor_ram_util(self, r_id):
-            h_cpu_util = dict()
-            h_cpu_util['Node_0_hostname_0'] = 10
-            h_cpu_util['Node_1_hostname_1'] = 15
-            h_cpu_util['Node_2_hostname_2'] = 20
+    def get_hypervisor_ram_util(self, r_id):
+        h_cpu_util = dict()
+        h_cpu_util['Node_0_hostname_0'] = 10
+        h_cpu_util['Node_1_hostname_1'] = 15
+        h_cpu_util['Node_2_hostname_2'] = 20
 
-        def get_hypervisor_disk_util(self, r_id):
-            h_cpu_util = dict()
-            h_cpu_util['Node_0_hostname_0'] = 150
-            h_cpu_util['Node_1_hostname_1'] = 100
-            h_cpu_util['Node_2_hostname_2'] = 135
+    def get_hypervisor_disk_util(self, r_id):
+        h_cpu_util = dict()
+        h_cpu_util['Node_0_hostname_0'] = 150
+        h_cpu_util['Node_1_hostname_1'] = 100
+        h_cpu_util['Node_2_hostname_2'] = 135
 
-        def get_vm_cpu_util(self, r_id):
-            vm_cpu_util = dict()
-            vm_cpu_util['VM_0'] = 1
-            vm_cpu_util['VM_1'] = 3
-            vm_cpu_util['VM_2'] = 6
-            vm_cpu_util['VM_3'] = 2
-            vm_cpu_util['VM_4'] = 4
-            vm_cpu_util['VM_5'] = 5
+    def get_vm_cpu_util(self, r_id):
+        vm_cpu_util = dict()
+        vm_cpu_util['VM_0'] = 1
+        vm_cpu_util['VM_1'] = 3
+        vm_cpu_util['VM_2'] = 6
+        vm_cpu_util['VM_3'] = 2
+        vm_cpu_util['VM_4'] = 4
+        vm_cpu_util['VM_5'] = 5
+        return vm_cpu_util[str(r_id)]
 
-            return vm_cpu_util[str(r_id)]
+    def get_vm_ram_util(self, r_id):
+        vm_ram_util = dict()
+        vm_ram_util['VM_0'] = 1
+        vm_ram_util['VM_1'] = 2
+        vm_ram_util['VM_2'] = 4
+        vm_ram_util['VM_3'] = 8
+        vm_ram_util['VM_4'] = 3
+        vm_ram_util['VM_5'] = 2
+        return vm_ram_util[str(r_id)]
 
-        def get_vm_ram_util(self, r_id):
-            vm_ram_util = dict()
-            vm_ram_util['VM_0'] = 1
-            vm_ram_util['VM_1'] = 2
-            vm_ram_util['VM_2'] = 4
-            vm_ram_util['VM_3'] = 8
-            vm_ram_util['VM_4'] = 3
-            vm_ram_util['VM_5'] = 2
+    def get_vm_disk_util(self, r_id):
+        vm_disk_util = dict()
+        vm_disk_util['VM_0'] = 10
+        vm_disk_util['VM_1'] = 15
+        vm_disk_util['VM_2'] = 30
+        vm_disk_util['VM_3'] = 35
+        vm_disk_util['VM_4'] = 20
+        vm_disk_util['VM_5'] = 25
 
-            return vm_ram_util[str(r_id)]
-
-        def get_vm_disk_util(self, r_id):
-            vm_disk_util = dict()
-            vm_disk_util['VM_0'] = 10
-            vm_disk_util['VM_1'] = 15
-            vm_disk_util['VM_2'] = 30
-            vm_disk_util['VM_3'] = 35
-            vm_disk_util['VM_4'] = 20
-            vm_disk_util['VM_5'] = 25
-
-            return vm_disk_util[str(r_id)]
+        return vm_disk_util[str(r_id)]

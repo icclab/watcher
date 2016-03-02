@@ -30,11 +30,24 @@ class TestSmartConsolidation(base.BaseTestCase):
     fake_cluster = faker_cluster_state.FakerModelCollector2()
 
     def test_get_vm_utilization(self):
-        pass
+        cluster = self.fake_cluster.generate_scenario_1()
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+        vm_0 = cluster.get_vm_from_id("VM_0")
+        vm_util = dict(cpu=1, ram=1, disk=10)
+        self.assertEqual(strategy.get_vm_utilization(vm_0, cluster),
+                         vm_util)
 
     def test_get_hypervisor_utilization(self):
-        strategy = SmartStrategy()
         cluster = self.fake_cluster.generate_scenario_1()
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+        node_1 = cluster.get_hypervisor_from_id("Node_1")
+        node_util = dict(cpu=5, ram=15, disk=100)
+        self.assertEqual(strategy.get_hypervisor_utilization(node_1, cluster),
+                         node_util)
 
     def test_get_hypervisor_capacity(self):
         pass
