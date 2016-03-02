@@ -195,17 +195,17 @@ class SmartStrategy(base.BaseStrategy):
             rcu[k] /= counters[k]
         return rcu
 
-    def is_overloaded(self, hypervisor, model):
+    def is_overloaded(self, hypervisor, model, cc):
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
             hypervisor, model)
         metrics = ['cpu']
         for m in metrics:
-            if hypervisor_utilization[m] > hypervisor_capacity[m]:
+            if hypervisor_utilization[m] > hypervisor_capacity[m] * cc[m]:
                 return True
         return False
 
-    def vm_fits(self, vm_uuid, hypervisor, model):
+    def vm_fits(self, vm_uuid, hypervisor, model, cc):
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
             hypervisor, model)
@@ -213,11 +213,11 @@ class SmartStrategy(base.BaseStrategy):
         metrics = ['cpu', 'ram', 'disk']
         for m in metrics:
             if vm_utilization[m] + \
-                    hypervisor_utilization[m] > hypervisor_capacity[m]:
+                    hypervisor_utilization[m] > hypervisor_capacity[m] * cc[m]:
                 return False
         return True
 
-    def offload_phase(self, model):
+    def offload_phase(self, model, cc):
         '''
         Offload phase performing first-fit based bin packing to offload
         overloaded hypervisors. This is done in a fashion of moving
@@ -243,14 +243,14 @@ class SmartStrategy(base.BaseStrategy):
                                  key=lambda x: self.get_vm_utilization(
                         x, model)['cpu']):
                     for dst_hypervisor in sorted_hypervisors:
-                        if self.vm_fits(vm, dst_hypervisor, model):
+                        if self.vm_fits(vm, dst_hypervisor, model, cc):
                             self.add_migration(vm, hypervisor,
                                                dst_hypervisor, model)
                             break
                     if not self.is_overloaded(hypervisor, model):
                         break
 
-    def consolidation_phase(self, model):
+    def consolidation_phase(self, model, cc):
         '''
         Consolidation phase performing first-fit based bin packing.
         First, hypervisors with the lowest cpu utilization are consolidated
@@ -272,7 +272,7 @@ class SmartStrategy(base.BaseStrategy):
                              reverse=True):
                 dsc = len(sorted_hypervisors) - 1
                 for dst_hypervisor in reversed(sorted_hypervisors):
-                    if self.vm_fits(vm, dst_hypervisor, model):
+                    if self.vm_fits(vm, dst_hypervisor, model, cc):
                         self.add_migration(vm, hypervisor,
                                            dst_hypervisor, model)
                     dsc -= 1
@@ -286,24 +286,28 @@ class SmartStrategy(base.BaseStrategy):
         cru = self.get_cluster_relative_utilization(model)
 
         '''
-        * TODO (cima) Both phases optimise the model with regards to
-        hypervisor capacity. An additional capacity coefficient might
-        be used to set up the capacity threshold relatively.
-        Setting up different coefficient values in both phases may
-        lead to to more efficient consolidation in the end.
+        A capacity coefficient (cc) might be used to adjust optimization
+        thresholds. Different resources may require different coefficient
+        values as well as setting up different coefficient values in both
+        phases may lead to to more efficient consolidation in the end.
+        If the cc equals 1 the full resource capacity may be used, cc
+        values lower than 1 will lead to resource underutilization and
+        values higher than 1 will lead to resource overbooking.
         e.g. If targetted utilization is 80% of hypervisor capacity,
         the coefficient in the consolidation phase will be 0.8, but
         may any lower value in the offloading phase. The lower it gets
         the cluster will appear more 'released' (distributed) for the
         following consolidation phase.
-        This is just an idea and it needs to be ellaborated further.
         '''
+        cc = {'cpu': 1.0,
+              'ram': 1.0,
+              'disk': 1.0}
 
         # Offloading phase
-        self.offload_phase(model)
+        self.offload_phase(model, cc)
 
         # Consolidation phase
-        self.consolidation_phase(model)
+        self.consolidation_phase(model, cc)
 
         # Deactivate unused hypervisors
         self.deactivate_unused_hypervisors(model)
