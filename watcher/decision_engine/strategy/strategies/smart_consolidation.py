@@ -35,13 +35,24 @@ class SmartStrategy(base.BaseStrategy):
     def __init__(self, name=DEFAULT_NAME, description=DEFAULT_DESCRIPTION,
                  osc=None):
         super(SmartStrategy, self).__init__(name, description, osc)
-        self._ceilometer = \
-            ceilometer_cluster_history.CeilometerClusterHistory(osc=self.osc)
+        self._ceilometer = None
         self.number_of_migrations = 0
         self.number_of_released_hypervisors = 0
 
-    def add_migration(self, vm, src_hypervisor,
+    @property
+    def ceilometer(self):
+        if self._ceilometer is None:
+            self._ceilometer = (ceilometer_cluster_history.
+                                CeilometerClusterHistory(osc=self.osc))
+        return self._ceilometer
+
+    @ceilometer.setter
+    def ceilometer(self, ceilometer):
+        self._ceilometer = ceilometer
+
+    def add_migration(self, vm_uuid, src_hypervisor,
                       dst_hypervisor, model):
+        vm = model.get_vm_from_id(vm_uuid)
         model.get_mapping().unmap(src_hypervisor, vm)
         model.get_mapping().map(dst_hypervisor, vm)
         migration_type = 'live'
@@ -83,10 +94,10 @@ class SmartStrategy(base.BaseStrategy):
         ram_alloc_metric = 'memory'
         disk_alloc_metric = 'disk.root.size'
         vm_cpu_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
-                                                   meter_name=cpu_util_metric,
-                                                   period=period,
-                                                   aggregate=aggr)
+            self.ceilometer.statistic_aggregation(resource_id=vm_uuid,
+                                                  meter_name=cpu_util_metric,
+                                                  period=period,
+                                                  aggregate=aggr)
         vm_cpu_cores = model.get_resource_from_id(
             resource.ResourceType.cpu_cores).\
             get_capacity(model.get_vm_from_id(vm_uuid))
@@ -106,28 +117,28 @@ class SmartStrategy(base.BaseStrategy):
             raise NoDataFound
 
         vm_ram_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
-                                                   meter_name=ram_util_metric,
-                                                   period=period,
-                                                   aggregate=aggr)
+            self.ceilometer.statistic_aggregation(resource_id=vm_uuid,
+                                                  meter_name=ram_util_metric,
+                                                  period=period,
+                                                  aggregate=aggr)
 
         if not vm_ram_util:
             vm_ram_util = \
-                self._ceilometer.statistic_aggregation(
+                self.ceilometer.statistic_aggregation(
                     resource_id=vm_uuid,
                     meter_name=ram_alloc_metric,
                     period=period,
                     aggregate=aggr)
 
         vm_disk_util = \
-            self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
-                                                   meter_name=disk_util_metric,
-                                                   period=period,
-                                                   aggregate=aggr)
+            self.ceilometer.statistic_aggregation(resource_id=vm_uuid,
+                                                  meter_name=disk_util_metric,
+                                                  period=period,
+                                                  aggregate=aggr)
 
         if not vm_disk_util:
             vm_disk_util = \
-                self._ceilometer.statistic_aggregation(
+                self.ceilometer.statistic_aggregation(
                     resource_id=vm_uuid,
                     meter_name=disk_alloc_metric,
                     period=period,
@@ -156,10 +167,10 @@ class SmartStrategy(base.BaseStrategy):
         cpu_util_metric = 'compute.node.cpu.percent'
         resource_id = "%s_%s" % (hypervisor.uuid, hypervisor.hostname)
         hypervisor_cpu_util = \
-            self._ceilometer.statistic_aggregation(resource_id=resource_id,
-                                                   meter_name=cpu_util_metric,
-                                                   period=period,
-                                                   aggregate=aggr)
+            self.ceilometer.statistic_aggregation(resource_id=resource_id,
+                                                  meter_name=cpu_util_metric,
+                                                  period=period,
+                                                  aggregate=aggr)
         hypervisor_cpu_cores = model.get_resource_from_id(
             resource.ResourceType.cpu_cores).get_capacity(hypervisor)
         total_cpu_utilization = hypervisor_cpu_cores * \
@@ -292,18 +303,18 @@ class SmartStrategy(base.BaseStrategy):
             key=lambda x: self.get_hypervisor_utilization(x, model)['cpu'])
         asc = 0
         for hypervisor in sorted_hypervisors:
-            for vm in sorted(model.get_mapping().get_node_vms(hypervisor),
-                             key=lambda x: self.get_vm_utilization(
-                             x, model)['cpu'],
-                             reverse=True):
+            vms = sorted(model.get_mapping().get_node_vms(hypervisor),
+                         key=lambda x: self.get_vm_utilization(x,
+                         model)['cpu'])
+            for vm in reversed(vms):
                 dsc = len(sorted_hypervisors) - 1
                 for dst_hypervisor in reversed(sorted_hypervisors):
+                    if asc >= dsc:
+                        break
                     if self.vm_fits(vm, dst_hypervisor, model, cc):
                         self.add_migration(vm, hypervisor,
                                            dst_hypervisor, model)
                     dsc -= 1
-                    if asc >= dsc:
-                        break
             asc += 1
 
     def execute(self, original_model):
