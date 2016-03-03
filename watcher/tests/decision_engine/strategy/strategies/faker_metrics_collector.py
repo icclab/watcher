@@ -190,31 +190,19 @@ class FakeCeilometerMetrics:
 
     def get_hypervisor_cpu_util(self, r_id):
         h_cpu_util = dict()
-        h_cpu_util['Node_0_hostname_0'] = 15
-        h_cpu_util['Node_1_hostname_1'] = 5
+        h_cpu_util['Node_0_hostname_0'] = 50
+        h_cpu_util['Node_1_hostname_1'] = 30
         h_cpu_util['Node_2_hostname_2'] = 20
         return h_cpu_util[str(r_id)]
 
-    def get_hypervisor_ram_util(self, r_id):
-        h_cpu_util = dict()
-        h_cpu_util['Node_0_hostname_0'] = 10
-        h_cpu_util['Node_1_hostname_1'] = 15
-        h_cpu_util['Node_2_hostname_2'] = 20
-
-    def get_hypervisor_disk_util(self, r_id):
-        h_cpu_util = dict()
-        h_cpu_util['Node_0_hostname_0'] = 150
-        h_cpu_util['Node_1_hostname_1'] = 100
-        h_cpu_util['Node_2_hostname_2'] = 135
-
     def get_vm_cpu_util(self, r_id):
         vm_cpu_util = dict()
-        vm_cpu_util['VM_0'] = 1
-        vm_cpu_util['VM_1'] = 3
-        vm_cpu_util['VM_2'] = 6
-        vm_cpu_util['VM_3'] = 2
-        vm_cpu_util['VM_4'] = 4
-        vm_cpu_util['VM_5'] = 5
+        vm_cpu_util['VM_0'] = 10
+        vm_cpu_util['VM_1'] = 30
+        vm_cpu_util['VM_2'] = 60
+        vm_cpu_util['VM_3'] = 20
+        vm_cpu_util['VM_4'] = 40
+        vm_cpu_util['VM_5'] = 50
         return vm_cpu_util[str(r_id)]
 
     def get_vm_ram_util(self, r_id):
