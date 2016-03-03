@@ -42,8 +42,8 @@ class SmartStrategy(base.BaseStrategy):
 
     def add_migration(self, vm, src_hypervisor,
                       dst_hypervisor, model):
-        model.unmap(src_hypervisor, vm)
-        model.map(dst_hypervisor, vm)
+        model.get_mapping().unmap(src_hypervisor, vm)
+        model.get_mapping().map(dst_hypervisor, vm)
         migration_type = 'live'
         params = {'migration_type': migration_type,
                   'src_hypervisor': src_hypervisor,
