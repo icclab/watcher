@@ -80,7 +80,6 @@ class SmartStrategy(base.BaseStrategy):
         ram_util_metric = 'memory.usage'
         disk_util_metric = 'disk.usage'
 
-        cpu_alloc_metric = 'vcpus'
         ram_alloc_metric = 'memory'
         disk_alloc_metric = 'disk.root.size'
         vm_cpu_util = \
