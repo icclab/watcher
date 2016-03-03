@@ -15,9 +15,11 @@
 #
 from oslo_log import log
 
+from watcher._i18n import _LE
+from watcher.common.exception import NoDataFound
 from watcher.decision_engine.model import hypervisor_state as hyper_state
-from watcher.decision_engine.strategy.strategies import base
 from watcher.decision_engine.model import resource
+from watcher.decision_engine.strategy.strategies import base
 from watcher.metrics_engine.cluster_history import ceilometer \
     as ceilometer_cluster_history
 
@@ -86,7 +88,7 @@ class SmartStrategy(base.BaseStrategy):
                                                    meter_name=cpu_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
-       if not vm_cpu_util:
+        if not vm_cpu_util:
             vm_cpu_util = \
                 self._ceilometer.statistic_aggregation(
                     resource_id=vm_uuid,
@@ -95,10 +97,17 @@ class SmartStrategy(base.BaseStrategy):
                     aggregate=aggr)
 
         if not vm_cpu_util:
-            raise AttributeError
+            LOG.error(
+                _LE("No values returned by %(resource_id)s "
+                    "for %(metric_name)s"),
+                resource_id=vm_uuid,
+                metric_name=cpu_util_metric,
+            )
+            raise NoDataFound
 
         vm_cpu_cores = model.get_resource_from_id(
-            resource.ResourceType.cpu_cores).get_capacity(model.get_vm_from_id(vm_uuid))
+            resource.ResourceType.cpu_cores).\
+            get_capacity(model.get_vm_from_id(vm_uuid))
         total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
 
         vm_ram_util = \
@@ -130,8 +139,12 @@ class SmartStrategy(base.BaseStrategy):
                     aggregate=aggr)
 
         if not vm_ram_util or not vm_disk_util:
-            raise AttributeError
-
+            LOG.error(
+                _LE("No values returned by %(resource_id)s "
+                    "for memory.usage and disk.usage"),
+                resource_id=vm_uuid
+            )
+            raise NoDataFound
         return dict(cpu=total_cpu_utilization, ram=vm_ram_util,
                     disk=vm_disk_util)
 
@@ -146,8 +159,6 @@ class SmartStrategy(base.BaseStrategy):
         :return: dict(cpu(number of cores used), ram(MB used), disk(B used))
         """
         cpu_util_metric = 'compute.node.cpu.percent'
-        ram_util_metric = 'memory.usage'
-        disk_util_metric = 'disk.usage'
         resource_id = "%s_%s" % (hypervisor.uuid, hypervisor.hostname)
         hypervisor_cpu_util = \
             self._ceilometer.statistic_aggregation(resource_id=resource_id,
@@ -158,7 +169,8 @@ class SmartStrategy(base.BaseStrategy):
             resource.ResourceType.cpu_cores).get_capacity(hypervisor)
         total_cpu_utilization = hypervisor_cpu_cores * \
             (hypervisor_cpu_util / 100.0)
-
+        hypervisor_vms = \
+            model.get_mapping().get_node_vms_from_id(hypervisor.uuid)
         hypervisor_ram_util = 0
         hypervisor_disk_util = 0
         for vm_uuid in hypervisor_vms:
@@ -170,7 +182,6 @@ class SmartStrategy(base.BaseStrategy):
                     disk=hypervisor_disk_util)
 
     def get_hypervisor_capacity(self, hypervisor, model):
-        # TODO (gaea)
         """
         Collect cpu, ram and disk capacity of a hypervisor
         :param hypervisor: hypervisor object
@@ -180,7 +191,6 @@ class SmartStrategy(base.BaseStrategy):
         hypervisor_cpu_capacity = model.get_resource_from_id(
             resource.ResourceType.cpu_cores).get_capacity(hypervisor)
 
-        # TODO - Check output of disk capacity (MB or B)
         hypervisor_disk_capacity = model.get_resource_from_id(
             resource.ResourceType.disk).get_capacity(hypervisor)
 
