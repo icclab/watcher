@@ -18,6 +18,7 @@
 #
 
 import random
+from watcher.decision_engine.model import resource
 
 
 class FakerMetricsCollector(object):
@@ -174,11 +175,11 @@ class FakerMetricsCollector(object):
 
 
 class FakeCeilometerMetrics:
-    def __init__(self):
-        pass
+    def __init__(self, model):
+        self.model = model
 
     def mock_get_statistics(self, resource_id, meter_name, period=3600,
-                           aggregate='avg'):
+                            aggregate='avg'):
         if meter_name == "compute.node.cpu.percent":
             return self.get_hypervisor_cpu_util(resource_id)
         elif meter_name == "cpu_util":
@@ -189,11 +190,28 @@ class FakeCeilometerMetrics:
             return self.get_vm_disk_util(resource_id)
 
     def get_hypervisor_cpu_util(self, r_id):
-        h_cpu_util = dict()
-        h_cpu_util['Node_0_hostname_0'] = 50
-        h_cpu_util['Node_1_hostname_1'] = 30
-        h_cpu_util['Node_2_hostname_2'] = 20
-        return h_cpu_util[str(r_id)]
+        '''
+        Calculates hypervisor utilization dynamicaly.
+        Hypervisor CPU utilization should consider
+        and corelate with actual VM-hypervisor mappings
+        provided within a cluster model.
+
+        Returns relative hypervisor CPU utilization <0, 100>.
+        '''
+
+        id = '%s_%s' % (r_id.split('_')[0], r_id.split('_')[1])
+        vms = self.model.get_mapping().get_node_vms_from_id(id)
+        util_sum = 0.0
+        hypervisor_cpu_cores = self.model.get_resource_from_id(
+            resource.ResourceType.cpu_cores).get_capacity_from_id(id)
+        for vm_uuid in vms:
+            vm_cpu_cores = self.model.get_resource_from_id(
+                resource.ResourceType.cpu_cores).\
+                get_capacity(self.model.get_vm_from_id(vm_uuid))
+            total_cpu_util = vm_cpu_cores * self.get_vm_cpu_util(vm_uuid)
+            util_sum += total_cpu_util / 100.0
+        util_sum /= hypervisor_cpu_cores
+        return util_sum * 100.0
 
     def get_vm_cpu_util(self, r_id):
         vm_cpu_util = dict()
