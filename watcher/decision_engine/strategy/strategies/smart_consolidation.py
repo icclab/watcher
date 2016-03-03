@@ -88,15 +88,16 @@ class SmartStrategy(base.BaseStrategy):
                                                    meter_name=cpu_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
-        if not vm_cpu_util:
-            vm_cpu_util = \
-                self._ceilometer.statistic_aggregation(
-                    resource_id=vm_uuid,
-                    meter_name=cpu_alloc_metric,
-                    period=period,
-                    aggregate=aggr)
+        vm_cpu_cores = model.get_resource_from_id(
+            resource.ResourceType.cpu_cores).\
+            get_capacity(model.get_vm_from_id(vm_uuid))
 
-        if not vm_cpu_util:
+        if vm_cpu_util:
+            total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
+        else:
+            total_cpu_utilization = vm_cpu_cores
+
+        if not total_cpu_utilization:
             LOG.error(
                 _LE("No values returned by %(resource_id)s "
                     "for %(metric_name)s"),
@@ -104,11 +105,6 @@ class SmartStrategy(base.BaseStrategy):
                 metric_name=cpu_util_metric,
             )
             raise NoDataFound
-
-        vm_cpu_cores = model.get_resource_from_id(
-            resource.ResourceType.cpu_cores).\
-            get_capacity(model.get_vm_from_id(vm_uuid))
-        total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
 
         vm_ram_util = \
             self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
