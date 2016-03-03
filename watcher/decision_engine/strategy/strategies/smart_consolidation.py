@@ -264,7 +264,7 @@ class SmartStrategy(base.BaseStrategy):
             model.get_all_hypervisors().values(),
             key=lambda x: self.get_hypervisor_utilization(x, model)['cpu'])
         for hypervisor in reversed(sorted_hypervisors):
-            if self.is_overloaded(hypervisor, model):
+            if self.is_overloaded(hypervisor, model, cc):
                 for vm in sorted(model.get_mapping().get_node_vms(hypervisor),
                                  key=lambda x: self.get_vm_utilization(
                         x, model)['cpu']):
@@ -273,7 +273,7 @@ class SmartStrategy(base.BaseStrategy):
                             self.add_migration(vm, hypervisor,
                                                dst_hypervisor, model)
                             break
-                    if not self.is_overloaded(hypervisor, model):
+                    if not self.is_overloaded(hypervisor, model, cc):
                         break
 
     def consolidation_phase(self, model, cc):
