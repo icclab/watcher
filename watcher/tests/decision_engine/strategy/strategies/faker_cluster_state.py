@@ -242,6 +242,9 @@ class FakerModelCollector2(api.BaseClusterModelCollector):
     def __init__(self):
         pass
 
+    def get_latest_cluster_data_model(self):
+        return self.generate_scenario_1()
+
     def generate_scenario_1(self):
         '''
         Simulates a cluster with 2 hypervisors and

@@ -269,7 +269,7 @@ class SmartStrategy(base.BaseStrategy):
                 for vm in sorted(model.get_mapping().get_node_vms(hypervisor),
                                  key=lambda x: self.get_vm_utilization(
                         x, model)['cpu']):
-                    for dst_hypervisor in sorted_hypervisors:
+                    for dst_hypervisor in reversed(sorted_hypervisors):
                         if self.vm_fits(vm, dst_hypervisor, model, cc):
                             self.add_migration(vm, hypervisor,
                                                dst_hypervisor, model)
