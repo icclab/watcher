@@ -66,7 +66,6 @@ class SmartStrategy(base.BaseStrategy):
         return deepcopy(model)
 
     def get_vm_utilization(self, vm_uuid, model, period=3600, aggr='avg'):
-        # TODO (gaea)
         """
         Collect cpu, ram and disk utilization statistics of a virtual machine
         :param vm: vm object
@@ -78,11 +77,26 @@ class SmartStrategy(base.BaseStrategy):
         cpu_util_metric = 'cpu_util'
         ram_util_metric = 'memory.usage'
         disk_util_metric = 'disk.usage'
+
+        cpu_alloc_metric = 'vcpus'
+        ram_alloc_metric = 'memory'
+        disk_alloc_metric = 'disk.root.size'
         vm_cpu_util = \
             self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
                                                    meter_name=cpu_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
+       if not vm_cpu_util:
+            vm_cpu_util = \
+                self._ceilometer.statistic_aggregation(
+                    resource_id=vm_uuid,
+                    meter_name=cpu_alloc_metric,
+                    period=period,
+                    aggregate=aggr)
+
+        if not vm_cpu_util:
+            raise AttributeError
+
         vm_cpu_cores = model.get_resource_from_id(
             resource.ResourceType.cpu_cores).get_capacity(model.get_vm_from_id(vm_uuid))
         total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
@@ -93,17 +107,36 @@ class SmartStrategy(base.BaseStrategy):
                                                    period=period,
                                                    aggregate=aggr)
 
+        if not vm_ram_util:
+            vm_ram_util = \
+                self._ceilometer.statistic_aggregation(
+                    resource_id=vm_uuid,
+                    meter_name=ram_alloc_metric,
+                    period=period,
+                    aggregate=aggr)
+
         vm_disk_util = \
             self._ceilometer.statistic_aggregation(resource_id=vm_uuid,
                                                    meter_name=disk_util_metric,
                                                    period=period,
                                                    aggregate=aggr)
+
+        if not vm_disk_util:
+            vm_disk_util = \
+                self._ceilometer.statistic_aggregation(
+                    resource_id=vm_uuid,
+                    meter_name=disk_alloc_metric,
+                    period=period,
+                    aggregate=aggr)
+
+        if not vm_ram_util or not vm_disk_util:
+            raise AttributeError
+
         return dict(cpu=total_cpu_utilization, ram=vm_ram_util,
                     disk=vm_disk_util)
 
     def get_hypervisor_utilization(self, hypervisor, model, period=3600,
                                    aggr='avg'):
-        # TODO (gaea)
         """
         Collect cpu, ram and disk utilization statistics of a hypervisor
         :param hypervisor: hypervisor object
@@ -126,24 +159,12 @@ class SmartStrategy(base.BaseStrategy):
         total_cpu_utilization = hypervisor_cpu_cores * \
             (hypervisor_cpu_util / 100.0)
 
-        hypervisor_vms = \
-            model.get_mapping().get_node_vms_from_id(hypervisor.uuid)
-
-        hypervisor_ram_util = sum(map(lambda vm_uuid:
-                                      self._ceilometer.statistic_aggregation(
-                                          resource_id=vm_uuid,
-                                          meter_name=ram_util_metric,
-                                          period=period,
-                                          aggregate=aggr),
-                                      hypervisor_vms))
-
-        hypervisor_disk_util = sum(map(lambda vm_uuid:
-                                       self._ceilometer.statistic_aggregation(
-                                           resource_id=vm_uuid,
-                                           meter_name=disk_util_metric,
-                                           period=period,
-                                           aggregate=aggr),
-                                       hypervisor_vms))
+        hypervisor_ram_util = 0
+        hypervisor_disk_util = 0
+        for vm_uuid in hypervisor_vms:
+            vm_util = self.get_vm_utilization(vm_uuid, model)
+            hypervisor_ram_util += vm_util['ram']
+            hypervisor_disk_util += vm_util['disk']
 
         return dict(cpu=total_cpu_utilization, ram=hypervisor_ram_util,
                     disk=hypervisor_disk_util)
