@@ -211,3 +211,34 @@ class TestSmartConsolidation(base.BaseTestCase):
                                           'migration_type': 'live',
                                           'resource_id': vm_uuid}}]
         self.assertEqual(strategy.solution.actions, expected)
+
+    def test_strategy(self):
+        model = self.fake_cluster.generate_scenario_2()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h1 = model.get_hypervisor_from_id('Node_0')
+        h2 = model.get_hypervisor_from_id('Node_1')
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
+        strategy.offload_phase(model, cc)
+        strategy.consolidation_phase(model, cc)
+        strategy.deactivate_unused_hypervisors(model)
+        strategy.optimize_solution(model)
+        expected = [{'action_type': 'migrate',
+                     'input_parameters': {'dst_hypervisor': h2,
+                                          'src_hypervisor': h1,
+                                          'migration_type': 'live',
+                                          'resource_id': 'VM_3'}},
+                    {'action_type': 'migrate',
+                     'input_parameters': {'dst_hypervisor': h2,
+                                          'src_hypervisor': h1,
+                                          'migration_type': 'live',
+                                          'resource_id': 'VM_1'}},
+                    {'action_type': 'change_nova_service_state',
+                     'input_parameters': {'state': 'down',
+                                          'resource_id': 'Node_3'}},
+                    {'action_type': 'change_nova_service_state',
+                     'input_parameters': {'state': 'down',
+                                          'resource_id': 'Node_2'}}]
+        self.assertEqual(strategy.solution.actions, expected)

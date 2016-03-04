@@ -249,6 +249,30 @@ class SmartStrategy(base.BaseStrategy):
                 return False
         return True
 
+    def optimize_solution(self, model):
+        '''
+        A->B, B->C => A->C
+        A->B, B->A => No action
+        '''
+        migrate_actions = (
+            a for a in self.solution.actions if a[
+                'action_type'] == 'migrate')
+        vm_to_be_migrated = (a['input_parameters']['resource_id']
+                             for a in migrate_actions)
+        vm_uuids = list(set(vm_to_be_migrated))
+        for vm_uuid in vm_uuids:
+            actions = list(
+                a for a in self.solution.actions if a[
+                    'input_parameters'][
+                        'resource_id'] == vm_uuid)
+            if len(actions) > 1:
+                src = actions[0]['input_parameters']['src_hypervisor']
+                dst = actions[-1]['input_parameters']['dst_hypervisor']
+                for a in actions:
+                    self.solution.actions.remove(a)
+                if src != dst:
+                    self.add_migration(vm_uuid, src, dst, model)
+
     def offload_phase(self, model, cc):
         '''
         Offload phase performing first-fit based bin packing to offload
@@ -256,14 +280,12 @@ class SmartStrategy(base.BaseStrategy):
         the least CPU utilized VM first as live migration these
         generaly causes less troubles.
 
-         * TODO (cima) The curent implementation doesn't consider
-         hypervisors' states. Offloading phase should be able to
-         active turned off hypervisors (if available) in a case
-         of the resource capacity provided by activated hypervisors
-         is not able to accomodate all the load. As the offload phase
-         is later followed by the consolidation phase, the hypervisor
-         activation in this doesn't necessarily results in more activated
-         hypervisors in the final solution.
+        * This phase is be able to active turned off hypervisors (if available)
+        in the case of the resource capacity provided by active hypervisors
+        is not able to accomodate all the load. As the offload phase
+        is later followed by the consolidation phase, the hypervisor
+        activation in this phase doesn't necessarily results in more activated
+        hypervisors in the final solution.
         '''
 
         sorted_hypervisors = sorted(
@@ -342,6 +364,9 @@ class SmartStrategy(base.BaseStrategy):
 
         # Deactivate unused hypervisors
         self.deactivate_unused_hypervisors(model)
+
+        # Optimize solution
+        self.optimize_solution(model)
 
         cru_after = self.get_relative_cluster_utilization(model)
         info = {
