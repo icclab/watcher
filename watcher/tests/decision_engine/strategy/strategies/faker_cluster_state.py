@@ -287,7 +287,7 @@ class FakerModelCollector2(api.BaseClusterModelCollector):
             current_state_cluster.get_vm_from_id("VM_0"))
 
         current_state_cluster.get_mapping().map(
-            current_state_cluster.get_hypervisor_from_id("Node_0"),
+            current_state_cluster.get_hypervisor_from_id("Node_1"),
             current_state_cluster.get_vm_from_id("VM_1"))
 
         return current_state_cluster

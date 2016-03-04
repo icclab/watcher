@@ -25,24 +25,15 @@ from watcher.tests.decision_engine.strategy.strategies \
     import faker_metrics_collector
 
 
-class TestingSmartStrategy(SmartStrategy):
-    DEFAULT_NAME = 'smart'
-    DEFAULT_DESCRIPTION = 'Smart Strategy'
-
-    def __init__(self, name=DEFAULT_NAME, description=DEFAULT_DESCRIPTION,
-                 osc=None):
-        self._ceilometer = None
-
-
 class TestSmartConsolidation(base.BaseTestCase):
-    fake_metrics = faker_metrics_collector.FakeCeilometerMetrics()
     fake_cluster = faker_cluster_state.FakerModelCollector2()
 
     def test_get_vm_utilization(self):
         cluster = self.fake_cluster.generate_scenario_1()
-        strategy = TestingSmartStrategy()
-        strategy._ceilometer = mock.MagicMock(
-            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(cluster)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
         vm_0 = cluster.get_vm_from_id("VM_0")
         vm_util = dict(cpu=1.0, ram=1, disk=10)
         self.assertEqual(strategy.get_vm_utilization(vm_0.uuid, cluster),
@@ -50,31 +41,33 @@ class TestSmartConsolidation(base.BaseTestCase):
 
     def test_get_hypervisor_utilization(self):
         cluster = self.fake_cluster.generate_scenario_1()
-        strategy = TestingSmartStrategy()
-        strategy._ceilometer = mock.MagicMock(
-            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(cluster)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
         node_0 = cluster.get_hypervisor_from_id("Node_0")
-        node_util = dict(cpu=20.0, ram=3, disk=25)
+        node_util = dict(cpu=1.0, ram=1, disk=10)
         self.assertEqual(strategy.get_hypervisor_utilization(node_0, cluster),
                          node_util)
 
     def test_get_hypervisor_capacity(self):
         cluster = self.fake_cluster.generate_scenario_1()
-        strategy = TestingSmartStrategy()
-        strategy._ceilometer = mock.MagicMock(
-            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(cluster)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
         node_0 = cluster.get_hypervisor_from_id("Node_0")
         node_util = dict(cpu=40, ram=64, disk=250)
         self.assertEqual(strategy.get_hypervisor_capacity(node_0, cluster),
                          node_util)
 
-    def test_add_migration():
+    def test_add_migration(self):
         pass
 
-    def test_is_overloaded():
+    def test_is_overloaded(self):
         pass
 
-    def test_deactivate_unused_hypervisors():
+    def test_deactivate_unused_hypervisors(self):
         pass
 
     def test_offload_phase(self):
@@ -82,11 +75,16 @@ class TestSmartConsolidation(base.BaseTestCase):
         Scenario: 2 hypervisors, 2VMs in total exceeding
         hypervisors capacity.
         '''
-        # TODO use own models and metrics
+
         model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
         strategy = SmartStrategy()
         strategy.ceilometer = mock.MagicMock(
-            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
+        strategy.offload_phase(model, cc)
+#        self.assertEqual(False,True)
 
     def test_consolidation_phase(self):
         '''
@@ -95,8 +93,12 @@ class TestSmartConsolidation(base.BaseTestCase):
         Expected actions: 1 VM migration, 1 hypervisor
         state change.
         '''
-        # TODO use own models and metrics
+
         model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
         strategy = SmartStrategy()
         strategy.ceilometer = mock.MagicMock(
-            statistic_aggregation=self.fake_metrics.mock_get_statistics)
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
+        strategy.consolidation_phase(model, cc)
+#        self.assertEqual(False,True)
