@@ -50,11 +50,31 @@ class SmartStrategy(base.BaseStrategy):
     def ceilometer(self, ceilometer):
         self._ceilometer = ceilometer
 
+    def activate_hypervisor(self):
+        params = {'state': hyper_state.HypervisorState.ONLINE.value}
+        self.solution.add_action(
+            action_type='change_nova_service_state',
+            resource_id=hypervisor.uuid,
+            input_parameters=params)
+        self.number_of_released_hypervisors -= 1
+
+    def deactivate_hypervisor(self, hypervisor):
+        params = {'state': hyper_state.HypervisorState.OFFLINE.value}
+        self.solution.add_action(
+            action_type='change_nova_service_state',
+            resource_id=hypervisor.uuid,
+            input_parameters=params)
+        self.number_of_released_hypervisors += 1
+
     def add_migration(self, vm_uuid, src_hypervisor,
                       dst_hypervisor, model):
         vm = model.get_vm_from_id(vm_uuid)
+        if dst_hypervisor.state == hyper_state.HypervisorState.OFFLINE:
+            self.activate_hypervisor(dst_hypervisor)
         model.get_mapping().unmap(src_hypervisor, vm)
         model.get_mapping().map(dst_hypervisor, vm)
+
+        # TODO(cima) check VM state
         migration_type = 'live'
         params = {'migration_type': migration_type,
                   'src_hypervisor': src_hypervisor,
@@ -67,13 +87,7 @@ class SmartStrategy(base.BaseStrategy):
     def deactivate_unused_hypervisors(self, model):
         for hypervisor in model.get_all_hypervisors().values():
             if len(model.get_mapping().get_node_vms(hypervisor)) == 0:
-                params = \
-                    {'state': hyper_state.HypervisorState.OFFLINE.value}
-                self.solution.add_action(
-                    action_type='change_nova_service_state',
-                    resource_id=hypervisor.uuid,
-                    input_parameters=params)
-                self.number_of_released_hypervisors += 1
+                self.deactivate_hypervisor(hypervisor)
 
     def get_prediction_model(self, model):
         return deepcopy(model)
@@ -190,7 +204,7 @@ class SmartStrategy(base.BaseStrategy):
             resource.ResourceType.cpu_cores).get_capacity(hypervisor)
 
         hypervisor_disk_capacity = model.get_resource_from_id(
-            resource.ResourceType.disk).get_capacity(hypervisor)
+            resource.ResourceType.disk_capacity).get_capacity(hypervisor)
 
         hypervisor_ram_capacity = model.get_resource_from_id(
             resource.ResourceType.memory).get_capacity(hypervisor)
@@ -210,8 +224,7 @@ class SmartStrategy(base.BaseStrategy):
         rcu = {}
         counters = {}
         for hypervisor in hypervisors:
-            if hypervisor.state.value ==\
-                    hyper_state.HypervisorState.ONLINE.value:
+            if hypervisor.state == hyper_state.HypervisorState.ONLINE.value:
                 rhu = self.get_relative_hypervisor_utilization(
                     hypervisor, model)
                 for k in rhu.keys():
@@ -314,6 +327,7 @@ class SmartStrategy(base.BaseStrategy):
         LOG.info("Executing Smart Strategy")
         model = self.get_prediction_model(original_model)
         cru = self.get_relative_cluster_utilization(model)
+        self.ceilometer_vm_data_cache = {}
 
         '''
         A capacity coefficient (cc) might be used to adjust optimization
