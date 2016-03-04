@@ -38,6 +38,7 @@ class SmartStrategy(base.BaseStrategy):
         self._ceilometer = None
         self.number_of_migrations = 0
         self.number_of_released_hypervisors = 0
+        self.ceilometer_vm_data_cache = dict()
 
     @property
     def ceilometer(self):
@@ -50,7 +51,7 @@ class SmartStrategy(base.BaseStrategy):
     def ceilometer(self, ceilometer):
         self._ceilometer = ceilometer
 
-    def activate_hypervisor(self):
+    def activate_hypervisor(self, hypervisor):
         params = {'state': hyper_state.HypervisorState.ONLINE.value}
         self.solution.add_action(
             action_type='change_nova_service_state',
@@ -101,6 +102,9 @@ class SmartStrategy(base.BaseStrategy):
         :param aggr: string
         :return: dict(cpu(number of vcpus used), ram(MB used), disk(B used))
         """
+        if vm_uuid in self.ceilometer_vm_data_cache.keys():
+            return self.ceilometer_vm_data_cache.get(vm_uuid)
+
         cpu_util_metric = 'cpu_util'
         ram_util_metric = 'memory.usage'
 
@@ -119,15 +123,6 @@ class SmartStrategy(base.BaseStrategy):
             total_cpu_utilization = vm_cpu_cores * (vm_cpu_util / 100.0)
         else:
             total_cpu_utilization = vm_cpu_cores
-
-        if not total_cpu_utilization:
-            LOG.error(
-                _LE("No values returned by %(resource_id)s "
-                    "for %(metric_name)s"),
-                resource_id=vm_uuid,
-                metric_name=cpu_util_metric,
-            )
-            raise NoDataFound
 
         vm_ram_util = \
             self.ceilometer.statistic_aggregation(resource_id=vm_uuid,
@@ -153,12 +148,15 @@ class SmartStrategy(base.BaseStrategy):
         if not vm_ram_util or not vm_disk_util:
             LOG.error(
                 _LE("No values returned by %(resource_id)s "
-                    "for memory.usage and disk.usage"),
+                    "for memory.usage or disk.root.size"),
                 resource_id=vm_uuid
             )
             raise NoDataFound
-        return dict(cpu=total_cpu_utilization, ram=vm_ram_util,
-                    disk=vm_disk_util)
+
+        self.ceilometer_vm_data_cache[vm_uuid] = \
+            dict(cpu=total_cpu_utilization, ram=vm_ram_util,
+                 disk=vm_disk_util)
+        return self.ceilometer_vm_data_cache.get(vm_uuid)
 
     def get_hypervisor_utilization(self, hypervisor, model, period=3600,
                                    aggr='avg'):
@@ -170,27 +168,18 @@ class SmartStrategy(base.BaseStrategy):
         :param aggr: string
         :return: dict(cpu(number of cores used), ram(MB used), disk(B used))
         """
-        cpu_util_metric = 'compute.node.cpu.percent'
-        resource_id = "%s_%s" % (hypervisor.uuid, hypervisor.hostname)
-        hypervisor_cpu_util = \
-            self.ceilometer.statistic_aggregation(resource_id=resource_id,
-                                                  meter_name=cpu_util_metric,
-                                                  period=period,
-                                                  aggregate=aggr)
-        hypervisor_cpu_cores = model.get_resource_from_id(
-            resource.ResourceType.cpu_cores).get_capacity(hypervisor)
-        total_cpu_utilization = hypervisor_cpu_cores * \
-            (hypervisor_cpu_util / 100.0)
         hypervisor_vms = \
             model.get_mapping().get_node_vms_from_id(hypervisor.uuid)
         hypervisor_ram_util = 0
         hypervisor_disk_util = 0
+        hypervisor_cpu_util = 0
         for vm_uuid in hypervisor_vms:
             vm_util = self.get_vm_utilization(vm_uuid, model)
+            hypervisor_cpu_util += vm_util['cpu']
             hypervisor_ram_util += vm_util['ram']
             hypervisor_disk_util += vm_util['disk']
 
-        return dict(cpu=total_cpu_utilization, ram=hypervisor_ram_util,
+        return dict(cpu=hypervisor_cpu_util, ram=hypervisor_ram_util,
                     disk=hypervisor_disk_util)
 
     def get_hypervisor_capacity(self, hypervisor, model):
@@ -327,7 +316,7 @@ class SmartStrategy(base.BaseStrategy):
         LOG.info("Executing Smart Strategy")
         model = self.get_prediction_model(original_model)
         cru = self.get_relative_cluster_utilization(model)
-        self.ceilometer_vm_data_cache = {}
+        self.ceilometer_vm_data_cache = dict()
 
         '''
         A capacity coefficient (cc) might be used to adjust optimization
