@@ -135,6 +135,32 @@ class TestSmartConsolidation(base.BaseTestCase):
         res = strategy.vm_fits(vm_uuid, h, model, cc)
         self.assertEqual(res, False)
 
+    def test_activate_hypervisor(self):
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h = model.get_hypervisor_from_id('Node_0')
+        strategy.activate_hypervisor(h)
+        expected = [{'action_type': 'change_nova_service_state',
+                     'input_parameters': {'state': 'up',
+                                          'resource_id': 'Node_0'}}]
+        self.assertEqual(strategy.solution.actions, expected)
+
+    def test_deactivate_hypervisor(self):
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h = model.get_hypervisor_from_id('Node_0')
+        strategy.deactivate_hypervisor(h)
+        expected = [{'action_type': 'change_nova_service_state',
+                     'input_parameters': {'state': 'down',
+                                          'resource_id': 'Node_0'}}]
+        self.assertEqual(strategy.solution.actions, expected)
+
     def test_deactivate_unused_hypervisors(self):
         model = self.fake_cluster.generate_scenario_1()
         fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
