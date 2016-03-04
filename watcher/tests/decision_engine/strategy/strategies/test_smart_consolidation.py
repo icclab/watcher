@@ -61,44 +61,127 @@ class TestSmartConsolidation(base.BaseTestCase):
         self.assertEqual(strategy.get_hypervisor_capacity(node_0, cluster),
                          node_util)
 
+    def test_get_relative_hypervisor_utilization(self):
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        hypervisor = model.get_hypervisor_from_id('Node_0')
+        rhu = strategy.get_relative_hypervisor_utilization(hypervisor, model)
+        expected_rhu = {'disk': 0.04, 'ram': 0.015625, 'cpu': 0.025}
+        self.assertEqual(rhu, expected_rhu)
+
+    def test_get_relative_cluster_utilization(self):
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        cru = strategy.get_relative_cluster_utilization(model)
+        expected_cru = {'cpu': 0.05, 'disk': 0.05, 'ram': 0.0234375}
+        self.assertEqual(cru, expected_cru)
+
     def test_add_migration(self):
-        pass
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h1 = model.get_hypervisor_from_id('Node_0')
+        h2 = model.get_hypervisor_from_id('Node_1')
+        vm_uuid = 'VM_0'
+        strategy.add_migration(vm_uuid, h1, h2, model)
+        self.assertEqual(len(strategy.solution.actions), 1)
+        expected = {'action_type': 'migrate',
+                    'input_parameters': {'dst_hypervisor': h2,
+                                         'src_hypervisor': h1,
+                                         'migration_type': 'live',
+                                         'resource_id': vm_uuid}}
+        self.assertEqual(strategy.solution.actions[0], expected)
 
     def test_is_overloaded(self):
-        pass
+        strategy = SmartStrategy()
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h1 = model.get_hypervisor_from_id('Node_0')
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
+        res = strategy.is_overloaded(h1, model, cc)
+        self.assertEqual(res, False)
+
+        cc = {'cpu': 0.025, 'ram': 1.0, 'disk': 1.0}
+        res = strategy.is_overloaded(h1, model, cc)
+        self.assertEqual(res, False)
+
+        cc = {'cpu': 0.024, 'ram': 1.0, 'disk': 1.0}
+        res = strategy.is_overloaded(h1, model, cc)
+        self.assertEqual(res, True)
+
+    def test_vm_fits(self):
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h = model.get_hypervisor_from_id('Node_1')
+        vm_uuid = 'VM_0'
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
+        res = strategy.vm_fits(vm_uuid, h, model, cc)
+        self.assertEqual(res, True)
+
+        cc = {'cpu': 0.025, 'ram': 1.0, 'disk': 1.0}
+        res = strategy.vm_fits(vm_uuid, h, model, cc)
+        self.assertEqual(res, False)
 
     def test_deactivate_unused_hypervisors(self):
-        pass
+        model = self.fake_cluster.generate_scenario_1()
+        fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
+        strategy = SmartStrategy()
+        strategy.ceilometer = mock.MagicMock(
+            statistic_aggregation=fake_metrics.mock_get_statistics)
+        h1 = model.get_hypervisor_from_id('Node_0')
+        h2 = model.get_hypervisor_from_id('Node_1')
+        vm_uuid = 'VM_0'
+        strategy.deactivate_unused_hypervisors(model)
+        self.assertEqual(len(strategy.solution.actions), 0)
+
+        # Migrate VM to free the hypervisor
+        strategy.add_migration(vm_uuid, h1, h2, model)
+
+        strategy.deactivate_unused_hypervisors(model)
+        expected = {'action_type': 'change_nova_service_state',
+                    'input_parameters': {'state': 'down',
+                                         'resource_id': 'Node_0'}}
+        self.assertEqual(len(strategy.solution.actions), 2)
+        self.assertEqual(strategy.solution.actions[1], expected)
 
     def test_offload_phase(self):
-        '''
-        Scenario: 2 hypervisors, 2VMs in total exceeding
-        hypervisors capacity.
-        '''
-
         model = self.fake_cluster.generate_scenario_1()
         fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
         strategy = SmartStrategy()
         strategy.ceilometer = mock.MagicMock(
             statistic_aggregation=fake_metrics.mock_get_statistics)
-
         cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
         strategy.offload_phase(model, cc)
-#        self.assertEqual(False,True)
+        expected = []
+        self.assertEqual(strategy.solution.actions, expected)
 
     def test_consolidation_phase(self):
-        '''
-        Scenario: 2 hypervisors, 2 VMs which both can be
-        accommodated using just one.
-        Expected actions: 1 VM migration, 1 hypervisor
-        state change.
-        '''
-
         model = self.fake_cluster.generate_scenario_1()
         fake_metrics = faker_metrics_collector.FakeCeilometerMetrics(model)
         strategy = SmartStrategy()
         strategy.ceilometer = mock.MagicMock(
             statistic_aggregation=fake_metrics.mock_get_statistics)
+        h1 = model.get_hypervisor_from_id('Node_0')
+        h2 = model.get_hypervisor_from_id('Node_1')
+        vm_uuid = 'VM_0'
         cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
         strategy.consolidation_phase(model, cc)
-#        self.assertEqual(False,True)
+        expected = [{'action_type': 'migrate',
+                     'input_parameters': {'dst_hypervisor': h2,
+                                          'src_hypervisor': h1,
+                                          'migration_type': 'live',
+                                          'resource_id': vm_uuid}}]
+        self.assertEqual(strategy.solution.actions, expected)
