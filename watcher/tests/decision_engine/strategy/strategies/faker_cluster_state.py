@@ -257,19 +257,23 @@ class FakerModelCollector2(api.BaseClusterModelCollector):
         mem = resource.Resource(resource.ResourceType.memory)
         num_cores = resource.Resource(resource.ResourceType.cpu_cores)
         disk = resource.Resource(resource.ResourceType.disk)
+        disk_capacity =\
+            resource.Resource(resource.ResourceType.disk_capacity)
 
         current_state_cluster.create_resource(mem)
         current_state_cluster.create_resource(num_cores)
         current_state_cluster.create_resource(disk)
+        current_state_cluster.create_resource(disk_capacity)
 
         for i in range(0, count_node):
             node_uuid = "Node_{0}".format(i)
             node = hypervisor.Hypervisor()
             node.uuid = node_uuid
             node.hostname = "hostname_{0}".format(i)
+            node.state = 'up'
 
             mem.set_capacity(node, 64)
-            disk.set_capacity(node, 250)
+            disk_capacity.set_capacity(node, 250)
             num_cores.set_capacity(node, 40)
             current_state_cluster.add_hypervisor(node)
 

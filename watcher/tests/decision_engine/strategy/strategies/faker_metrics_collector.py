@@ -186,8 +186,8 @@ class FakeCeilometerMetrics:
             return self.get_vm_cpu_util(resource_id)
         elif meter_name == "memory.usage":
             return self.get_vm_ram_util(resource_id)
-        elif meter_name == "disk.usage":
-            return self.get_vm_disk_util(resource_id)
+        elif meter_name == "disk.root.size":
+            return self.get_vm_disk_root_size(resource_id)
 
     def get_hypervisor_cpu_util(self, r_id):
         '''
@@ -233,7 +233,7 @@ class FakeCeilometerMetrics:
         vm_ram_util['VM_5'] = 2
         return vm_ram_util[str(r_id)]
 
-    def get_vm_disk_util(self, r_id):
+    def get_vm_disk_root_size(self, r_id):
         vm_disk_util = dict()
         vm_disk_util['VM_0'] = 10
         vm_disk_util['VM_1'] = 15
