@@ -89,7 +89,6 @@ class SmartStrategy(base.BaseStrategy):
         """
         cpu_util_metric = 'cpu_util'
         ram_util_metric = 'memory.usage'
-        disk_util_metric = 'disk.usage'
 
         ram_alloc_metric = 'memory'
         disk_alloc_metric = 'disk.root.size'
@@ -131,18 +130,11 @@ class SmartStrategy(base.BaseStrategy):
                     aggregate=aggr)
 
         vm_disk_util = \
-            self.ceilometer.statistic_aggregation(resource_id=vm_uuid,
-                                                  meter_name=disk_util_metric,
-                                                  period=period,
-                                                  aggregate=aggr)
-
-        if not vm_disk_util:
-            vm_disk_util = \
-                self.ceilometer.statistic_aggregation(
-                    resource_id=vm_uuid,
-                    meter_name=disk_alloc_metric,
-                    period=period,
-                    aggregate=aggr)
+            self.ceilometer.statistic_aggregation(
+                resource_id=vm_uuid,
+                meter_name=disk_alloc_metric,
+                period=period,
+                aggregate=aggr)
 
         if not vm_ram_util or not vm_disk_util:
             LOG.error(
@@ -210,7 +202,7 @@ class SmartStrategy(base.BaseStrategy):
         util = self.get_hypervisor_utilization(hypervisor, model)
         cap = self.get_hypervisor_capacity(hypervisor, model)
         for k in util.keys():
-            rhu[k] = util[k] / cap[k]
+            rhu[k] = float(util[k]) / float(cap[k])
         return rhu
 
     def get_relative_cluster_utilization(self, model):
@@ -218,9 +210,10 @@ class SmartStrategy(base.BaseStrategy):
         rcu = {}
         counters = {}
         for hypervisor in hypervisors:
-            if hypervisor.state == hyper_state.HypervisorState.ONLINE:
-                rhu = self.get_relative_hypervisor_utilization(hypervisor,
-                                                               model)
+            if hypervisor.state.value ==\
+                    hyper_state.HypervisorState.ONLINE.value:
+                rhu = self.get_relative_hypervisor_utilization(
+                    hypervisor, model)
                 for k in rhu.keys():
                     if k not in rcu:
                         rcu[k] = 0
@@ -320,7 +313,7 @@ class SmartStrategy(base.BaseStrategy):
     def execute(self, original_model):
         LOG.info("Executing Smart Strategy")
         model = self.get_prediction_model(original_model)
-        cru = self.get_cluster_relative_utilization(model)
+        cru = self.get_relative_cluster_utilization(model)
 
         '''
         A capacity coefficient (cc) might be used to adjust optimization
@@ -336,9 +329,7 @@ class SmartStrategy(base.BaseStrategy):
         the cluster will appear more 'released' (distributed) for the
         following consolidation phase.
         '''
-        cc = {'cpu': 1.0,
-              'ram': 1.0,
-              'disk': 1.0}
+        cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
 
         # Offloading phase
         self.offload_phase(model, cc)
@@ -349,7 +340,7 @@ class SmartStrategy(base.BaseStrategy):
         # Deactivate unused hypervisors
         self.deactivate_unused_hypervisors(model)
 
-        cru_after = self.get_cluster_relative_utilization(model)
+        cru_after = self.get_relative_cluster_utilization(model)
         info = {
             'number_of_migrations': self.number_of_migrations,
             'number_of_released_hypervisors':
