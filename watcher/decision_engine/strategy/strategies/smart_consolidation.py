@@ -270,6 +270,7 @@ class SmartStrategy(base.BaseStrategy):
                 dst = actions[-1]['input_parameters']['dst_hypervisor']
                 for a in actions:
                     self.solution.actions.remove(a)
+                    self.number_of_migrations -= 1
                 if src != dst:
                     self.add_migration(vm_uuid, src, dst, model)
 
@@ -362,11 +363,11 @@ class SmartStrategy(base.BaseStrategy):
         # Consolidation phase
         self.consolidation_phase(model, cc)
 
-        # Deactivate unused hypervisors
-        self.deactivate_unused_hypervisors(model)
-
         # Optimize solution
         self.optimize_solution(model)
+
+        # Deactivate unused hypervisors
+        self.deactivate_unused_hypervisors(model)
 
         cru_after = self.get_relative_cluster_utilization(model)
         info = {
