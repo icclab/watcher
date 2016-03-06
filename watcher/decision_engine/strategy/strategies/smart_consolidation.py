@@ -1,5 +1,9 @@
 # -*- encoding: utf-8 -*-
 #
+# Authors: Vojtech CIMA <cima@zhaw.ch>
+#          Bruno GRAZIOLI <gaea@zhaw.ch>
+#          Sean MURPHY <murp@zhaw.ch>
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,8 +20,9 @@
 from oslo_log import log
 
 from watcher._i18n import _LE
-from watcher.common.exception import NoDataFound
+from watcher.common.exception import NoDataFound, WatcherException
 from watcher.decision_engine.model import hypervisor_state as hyper_state
+from watcher.decision_engine.model import vm_state
 from watcher.decision_engine.model import resource
 from watcher.decision_engine.strategy.strategies import base
 from watcher.metrics_engine.cluster_history import ceilometer \
@@ -52,6 +57,12 @@ class SmartStrategy(base.BaseStrategy):
         self._ceilometer = ceilometer
 
     def activate_hypervisor(self, hypervisor):
+        """
+        Adds an action for hypervisor activation into the solution.
+        :param hypervisor: hypervisor object
+        :return: None
+        """
+
         params = {'state': hyper_state.HypervisorState.ONLINE.value}
         self.solution.add_action(
             action_type='change_nova_service_state',
@@ -60,6 +71,12 @@ class SmartStrategy(base.BaseStrategy):
         self.number_of_released_hypervisors -= 1
 
     def deactivate_hypervisor(self, hypervisor):
+        """
+        Adds an action for hypervisor deactivation into the solution.
+        :param hypervisor: hypervisor object
+        :return: None
+        """
+
         params = {'state': hyper_state.HypervisorState.OFFLINE.value}
         self.solution.add_action(
             action_type='change_nova_service_state',
@@ -69,14 +86,37 @@ class SmartStrategy(base.BaseStrategy):
 
     def add_migration(self, vm_uuid, src_hypervisor,
                       dst_hypervisor, model):
+        """
+        Adds an action for VM migration into the solution.
+        :param: vm_uuid: string
+        :param src_hypervisor: hypervisor object
+        :param dst_hypervisor: hypervisor object
+        :param model: model_root object
+        :return: None
+        """
+
         vm = model.get_vm_from_id(vm_uuid)
+
+        if vm.state != vm_state.VMState.ACTIVE:
+            '''
+            Watcher curently only supports live VM migration which
+            requires VM to be active and both hypervisors to share
+            storage. When supported, the block migration may be used
+            as a fallback migration mechanism.
+
+            TODO check whether this works and consider better exception
+            '''
+            LOG.error('Cannot live migrate VM %s in state %s.' %
+                      (vm_uuid, vm.state.value))
+            raise WatcherException
+
+        migration_type = 'live'
+
         if dst_hypervisor.state == hyper_state.HypervisorState.OFFLINE:
             self.activate_hypervisor(dst_hypervisor)
         model.get_mapping().unmap(src_hypervisor, vm)
         model.get_mapping().map(dst_hypervisor, vm)
 
-        # TODO(cima) check VM state
-        migration_type = 'live'
         params = {'migration_type': migration_type,
                   'src_hypervisor': src_hypervisor,
                   'dst_hypervisor': dst_hypervisor}
@@ -86,22 +126,35 @@ class SmartStrategy(base.BaseStrategy):
         self.number_of_migrations += 1
 
     def deactivate_unused_hypervisors(self, model):
+        """
+        Generates actions for deactivation of unused hypervisors.
+        :param model: model_root object
+        :return: None
+        """
+
         for hypervisor in model.get_all_hypervisors().values():
             if len(model.get_mapping().get_node_vms(hypervisor)) == 0:
                 self.deactivate_hypervisor(hypervisor)
 
     def get_prediction_model(self, model):
+        """
+        Returns a deepcopy of a model representing current cluster state.
+        :param model: model_root object
+        :return: model_root object
+        """
+
         return deepcopy(model)
 
     def get_vm_utilization(self, vm_uuid, model, period=3600, aggr='avg'):
         """
         Collect cpu, ram and disk utilization statistics of a virtual machine
         :param vm: vm object
-        :param model:
+        :param model: model_root object
         :param period: seconds
         :param aggr: string
         :return: dict(cpu(number of vcpus used), ram(MB used), disk(B used))
         """
+
         if vm_uuid in self.ceilometer_vm_data_cache.keys():
             return self.ceilometer_vm_data_cache.get(vm_uuid)
 
@@ -163,11 +216,12 @@ class SmartStrategy(base.BaseStrategy):
         """
         Collect cpu, ram and disk utilization statistics of a hypervisor
         :param hypervisor: hypervisor object
-        :param model:
+        :param model: model_root object
         :param period: seconds
         :param aggr: string
         :return: dict(cpu(number of cores used), ram(MB used), disk(B used))
         """
+
         hypervisor_vms = \
             model.get_mapping().get_node_vms_from_id(hypervisor.uuid)
         hypervisor_ram_util = 0
@@ -186,9 +240,10 @@ class SmartStrategy(base.BaseStrategy):
         """
         Collect cpu, ram and disk capacity of a hypervisor
         :param hypervisor: hypervisor object
-        :param model:
+        :param model: model_root object
         :return: dict(cpu(cores), ram(MB), disk(B))
         """
+
         hypervisor_cpu_capacity = model.get_resource_from_id(
             resource.ResourceType.cpu_cores).get_capacity(hypervisor)
 
@@ -201,6 +256,13 @@ class SmartStrategy(base.BaseStrategy):
                     disk=hypervisor_disk_capacity)
 
     def get_relative_hypervisor_utilization(self, hypervisor, model):
+        """
+        Returns relative hypervisor utilization (rhu).
+        :param hypervisor: hypervisor object
+        :param model: model_root object
+        :return: {'cpu': <0,1>, 'ram': <0,1>, 'disk': <0,1>}
+        """
+
         rhu = {}
         util = self.get_hypervisor_utilization(hypervisor, model)
         cap = self.get_hypervisor_capacity(hypervisor, model)
@@ -209,6 +271,13 @@ class SmartStrategy(base.BaseStrategy):
         return rhu
 
     def get_relative_cluster_utilization(self, model):
+        """
+        Returns relative cluster utilization (rcu). RCU is an
+        average of relative utilizations (rhu) of active hypervisors.
+        :param model: model_root object
+        :return: {'cpu': <0,1>, 'ram': <0,1>, 'disk': <0,1>}
+        """
+
         hypervisors = model.get_all_hypervisors().values()
         rcu = {}
         counters = {}
@@ -228,6 +297,15 @@ class SmartStrategy(base.BaseStrategy):
         return rcu
 
     def is_overloaded(self, hypervisor, model, cc):
+        """
+        Indicates whether a hypervisor is overloaded considering
+        provided resource capacity coefficients (cc).
+        :param hypervisor: hypervisor object
+        :param model: model_root object
+        :param cc: dictionary containing resource capacity coefficients
+        :return: [True, False]
+        """
+
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
             hypervisor, model)
@@ -238,6 +316,16 @@ class SmartStrategy(base.BaseStrategy):
         return False
 
     def vm_fits(self, vm_uuid, hypervisor, model, cc):
+        """
+        Indicates whether is a hypervisor able to accomodate a VM
+        considering provided resource capacity coefficients (cc).
+        :param vm_uuid: string
+        :param hypervisor: hypervisor object
+        :param model: model_root object
+        :param cc: dictionary containing resource capacity coefficients
+        :return: [True, False]
+        """
+
         hypervisor_capacity = self.get_hypervisor_capacity(hypervisor, model)
         hypervisor_utilization = self.get_hypervisor_utilization(
             hypervisor, model)
@@ -250,10 +338,19 @@ class SmartStrategy(base.BaseStrategy):
         return True
 
     def optimize_solution(self, model):
-        '''
-        A->B, B->C => A->C
-        A->B, B->A => No action
-        '''
+        """
+        Optimizes solution by eliminating unnecessesary or
+        circular set of migrations which can be replaced by
+        a more efficient solution.
+        e.g.:
+         * A->B, B->C => replace migrations A->B, B->C with
+           a single migration A->C as both solution result in
+           VM running on hypervisor C which can be achieved with
+           one migration instead of two.
+         * A->B, B->A => remove A->B and B->A as they do not result
+           in a new VM placement.
+        """
+
         migrate_actions = (
             a for a in self.solution.actions if a[
                 'action_type'] == 'migrate')
@@ -275,19 +372,25 @@ class SmartStrategy(base.BaseStrategy):
                     self.add_migration(vm_uuid, src, dst, model)
 
     def offload_phase(self, model, cc):
-        '''
+        """
+        Performs offloading phase considering provided resource
+        capacity coefficients.
         Offload phase performing first-fit based bin packing to offload
         overloaded hypervisors. This is done in a fashion of moving
         the least CPU utilized VM first as live migration these
-        generaly causes less troubles.
+        generaly causes less troubles. This phase results in a cluster
+        with no overloaded hypervisors.
 
-        * This phase is be able to active turned off hypervisors (if available)
-        in the case of the resource capacity provided by active hypervisors
-        is not able to accomodate all the load. As the offload phase
-        is later followed by the consolidation phase, the hypervisor
-        activation in this phase doesn't necessarily results in more activated
-        hypervisors in the final solution.
-        '''
+        :param model: model_root object
+        :param cc: dictionary containing resource capacity coefficients
+
+        * This phase is be able to activate turned off hypervisors (if needed
+        and any available) in the case of the resource capacity provided by
+        active hypervisors is not able to accomodate all the load.
+        As the offload phase is later followed by the consolidation phase,
+        the hypervisor activation in this phase doesn't necessarily results
+        in more activated hypervisors in the final solution.
+        """
 
         sorted_hypervisors = sorted(
             model.get_all_hypervisors().values(),
@@ -306,7 +409,9 @@ class SmartStrategy(base.BaseStrategy):
                         break
 
     def consolidation_phase(self, model, cc):
-        '''
+        """
+        Performs consolidation phase considering provided resource
+        capacity coefficients.
         Consolidation phase performing first-fit based bin packing.
         First, hypervisors with the lowest cpu utilization are consolidated
         by moving their load to hypervisors with the highest cpu utilization
@@ -314,7 +419,10 @@ class SmartStrategy(base.BaseStrategy):
         VMs are prioritizied as their load is more difficult to accomodate
         in the system than less cpu utilizied VMs which can be later used
         to fill smaller CPU capacity gaps.
-        '''
+
+        :param model: model_root object
+        :param cc: dictionary containing resource capacity coefficients
+        """
 
         sorted_hypervisors = sorted(
             model.get_all_hypervisors().values(),
@@ -336,13 +444,19 @@ class SmartStrategy(base.BaseStrategy):
             asc += 1
 
     def execute(self, original_model):
-        LOG.info("Executing Smart Strategy")
-        model = self.get_prediction_model(original_model)
-        cru = self.get_relative_cluster_utilization(model)
-        self.ceilometer_vm_data_cache = dict()
+        """
+        Strategy's main entry point.
+        This strategy produces a solution resulting in more
+        efficient utilizition of cluster resources using following
+        four phases:
+         * Offload phase - handling over-utilized resources
+         * Consolidation phase - handling under-utilized resources
+         * Solution optimization - reducing number of migrations
+         * Deactivation of unused hypervisors
 
-        '''
-        A capacity coefficient (cc) might be used to adjust optimization
+        :param original_model: root_model object
+
+        * A capacity coefficient (cc) might be used to adjust optimization
         thresholds. Different resources may require different coefficient
         values as well as setting up different coefficient values in both
         phases may lead to to more efficient consolidation in the end.
@@ -354,7 +468,13 @@ class SmartStrategy(base.BaseStrategy):
         may any lower value in the offloading phase. The lower it gets
         the cluster will appear more 'released' (distributed) for the
         following consolidation phase.
-        '''
+        """
+
+        LOG.info("Executing Smart Strategy")
+        model = self.get_prediction_model(original_model)
+        cru = self.get_relative_cluster_utilization(model)
+        self.ceilometer_vm_data_cache = dict()
+
         cc = {'cpu': 1.0, 'ram': 1.0, 'disk': 1.0}
 
         # Offloading phase
