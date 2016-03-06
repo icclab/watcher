@@ -221,6 +221,10 @@ class FakeCeilometerMetrics:
         vm_cpu_util['VM_3'] = 20
         vm_cpu_util['VM_4'] = 40
         vm_cpu_util['VM_5'] = 50
+        vm_cpu_util['VM_6'] = 100
+        vm_cpu_util['VM_7'] = 100
+        vm_cpu_util['VM_8'] = 100
+        vm_cpu_util['VM_9'] = 100
         return vm_cpu_util[str(r_id)]
 
     def get_vm_ram_util(self, r_id):
@@ -231,6 +235,10 @@ class FakeCeilometerMetrics:
         vm_ram_util['VM_3'] = 8
         vm_ram_util['VM_4'] = 3
         vm_ram_util['VM_5'] = 2
+        vm_ram_util['VM_6'] = 1
+        vm_ram_util['VM_7'] = 2
+        vm_ram_util['VM_8'] = 4
+        vm_ram_util['VM_9'] = 8
         return vm_ram_util[str(r_id)]
 
     def get_vm_disk_root_size(self, r_id):
@@ -241,5 +249,8 @@ class FakeCeilometerMetrics:
         vm_disk_util['VM_3'] = 35
         vm_disk_util['VM_4'] = 20
         vm_disk_util['VM_5'] = 25
-
+        vm_disk_util['VM_6'] = 25
+        vm_disk_util['VM_7'] = 25
+        vm_disk_util['VM_8'] = 25
+        vm_disk_util['VM_9'] = 25
         return vm_disk_util[str(r_id)]
