@@ -225,13 +225,15 @@ class TestSmartConsolidation(base.BaseTestCase):
         strategy.consolidation_phase(model, cc)
         strategy.optimize_solution(model)
         strategy.deactivate_unused_hypervisors(model)
+        dst_hyp = strategy.solution.actions[0][
+            'input_parameters']['dst_hypervisor']
         expected = [{'action_type': 'migrate',
-                     'input_parameters': {'dst_hypervisor': h2,
+                     'input_parameters': {'dst_hypervisor': dst_hyp,
                                           'src_hypervisor': h1,
                                           'migration_type': 'live',
                                           'resource_id': 'VM_3'}},
                     {'action_type': 'migrate',
-                     'input_parameters': {'dst_hypervisor': h2,
+                     'input_parameters': {'dst_hypervisor': dst_hyp,
                                           'src_hypervisor': h1,
                                           'migration_type': 'live',
                                           'resource_id': 'VM_1'}},
