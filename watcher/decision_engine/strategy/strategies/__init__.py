@@ -17,11 +17,12 @@
 
 from watcher.decision_engine.strategy.strategies import basic_consolidation
 from watcher.decision_engine.strategy.strategies import dummy_strategy
+from watcher.decision_engine.strategy.strategies import smart_consolidation
 from watcher.decision_engine.strategy.strategies import outlet_temp_control
 
 BasicConsolidation = basic_consolidation.BasicConsolidation
 OutletTempControl = outlet_temp_control.OutletTempControl
 DummyStrategy = dummy_strategy.DummyStrategy
+SmartStrategy = smart_consolidation.SmartStrategy
 
-
-__all__ = (BasicConsolidation, OutletTempControl, DummyStrategy)
+__all__ = (BasicConsolidation, OutletTempControl, DummyStrategy, SmartStrategy)

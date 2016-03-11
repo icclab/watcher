@@ -18,6 +18,7 @@
 #
 from watcher.decision_engine.model import hypervisor
 from watcher.decision_engine.model import model_root as modelroot
+from watcher.decision_engine.model import vm_state
 from watcher.decision_engine.model import resource
 from watcher.decision_engine.model import vm as modelvm
 from watcher.metrics_engine.cluster_model_collector import api
@@ -233,5 +234,162 @@ class FakerModelCollector(api.BaseClusterModelCollector):
         current_state_cluster.get_mapping().map(
             current_state_cluster.get_hypervisor_from_id("Node_0"),
             current_state_cluster.get_vm_from_id("VM_0"))
+
+        return current_state_cluster
+
+
+class FakerModelCollector2(api.BaseClusterModelCollector):
+
+    def __init__(self):
+        pass
+
+    def get_latest_cluster_data_model(self):
+        return self.generate_scenario_1()
+
+    def generate_scenario_1(self):
+        '''
+        Simulates a cluster with 2 hypervisors and
+        2 VMs using 1:1 mapping
+        '''
+        current_state_cluster = modelroot.ModelRoot()
+        count_node = 2
+        count_vm = 2
+
+        mem = resource.Resource(resource.ResourceType.memory)
+        num_cores = resource.Resource(resource.ResourceType.cpu_cores)
+        disk = resource.Resource(resource.ResourceType.disk)
+        disk_capacity =\
+            resource.Resource(resource.ResourceType.disk_capacity)
+
+        current_state_cluster.create_resource(mem)
+        current_state_cluster.create_resource(num_cores)
+        current_state_cluster.create_resource(disk)
+        current_state_cluster.create_resource(disk_capacity)
+
+        for i in range(0, count_node):
+            node_uuid = "Node_{0}".format(i)
+            node = hypervisor.Hypervisor()
+            node.uuid = node_uuid
+            node.hostname = "hostname_{0}".format(i)
+            node.state = 'up'
+
+            mem.set_capacity(node, 64)
+            disk_capacity.set_capacity(node, 250)
+            num_cores.set_capacity(node, 40)
+            current_state_cluster.add_hypervisor(node)
+
+        for i in range(0, count_vm):
+            vm_uuid = "VM_{0}".format(i)
+            vm = modelvm.VM()
+            vm.uuid = vm_uuid
+            vm.state = vm_state.VMState.ACTIVE
+            mem.set_capacity(vm, 2)
+            disk.set_capacity(vm, 20)
+            num_cores.set_capacity(vm, 10)
+            current_state_cluster.add_vm(vm)
+
+        current_state_cluster.get_mapping().map(
+            current_state_cluster.get_hypervisor_from_id("Node_0"),
+            current_state_cluster.get_vm_from_id("VM_0"))
+
+        current_state_cluster.get_mapping().map(
+            current_state_cluster.get_hypervisor_from_id("Node_1"),
+            current_state_cluster.get_vm_from_id("VM_1"))
+
+        return current_state_cluster
+
+    def generate_scenario_2(self):
+        '''
+        Simulates a cluster with 4 hypervisors and
+        6 VMs all mapped to one hypervisor
+        '''
+        current_state_cluster = modelroot.ModelRoot()
+        count_node = 4
+        count_vm = 6
+
+        mem = resource.Resource(resource.ResourceType.memory)
+        num_cores = resource.Resource(resource.ResourceType.cpu_cores)
+        disk = resource.Resource(resource.ResourceType.disk)
+        disk_capacity =\
+            resource.Resource(resource.ResourceType.disk_capacity)
+
+        current_state_cluster.create_resource(mem)
+        current_state_cluster.create_resource(num_cores)
+        current_state_cluster.create_resource(disk)
+        current_state_cluster.create_resource(disk_capacity)
+
+        for i in range(0, count_node):
+            node_uuid = "Node_{0}".format(i)
+            node = hypervisor.Hypervisor()
+            node.uuid = node_uuid
+            node.hostname = "hostname_{0}".format(i)
+            node.state = 'up'
+
+            mem.set_capacity(node, 64)
+            disk_capacity.set_capacity(node, 250)
+            num_cores.set_capacity(node, 16)
+            current_state_cluster.add_hypervisor(node)
+
+        for i in range(0, count_vm):
+            vm_uuid = "VM_{0}".format(i)
+            vm = modelvm.VM()
+            vm.uuid = vm_uuid
+            vm.state = vm_state.VMState.ACTIVE
+            mem.set_capacity(vm, 2)
+            disk.set_capacity(vm, 20)
+            num_cores.set_capacity(vm, 10)
+            current_state_cluster.add_vm(vm)
+
+            current_state_cluster.get_mapping().map(
+                current_state_cluster.get_hypervisor_from_id("Node_0"),
+                current_state_cluster.get_vm_from_id("VM_%s" % str(i)))
+
+        return current_state_cluster
+
+    def generate_scenario_3(self):
+        '''
+        Simulates a cluster with 4 hypervisors and
+        6 VMs all mapped to one hypervisor
+        '''
+        current_state_cluster = modelroot.ModelRoot()
+        count_node = 2
+        count_vm = 4
+
+        mem = resource.Resource(resource.ResourceType.memory)
+        num_cores = resource.Resource(resource.ResourceType.cpu_cores)
+        disk = resource.Resource(resource.ResourceType.disk)
+        disk_capacity =\
+            resource.Resource(resource.ResourceType.disk_capacity)
+
+        current_state_cluster.create_resource(mem)
+        current_state_cluster.create_resource(num_cores)
+        current_state_cluster.create_resource(disk)
+        current_state_cluster.create_resource(disk_capacity)
+
+        for i in range(0, count_node):
+            node_uuid = "Node_{0}".format(i)
+            node = hypervisor.Hypervisor()
+            node.uuid = node_uuid
+            node.hostname = "hostname_{0}".format(i)
+            node.state = 'up'
+
+            mem.set_capacity(node, 64)
+            disk_capacity.set_capacity(node, 250)
+            num_cores.set_capacity(node, 10)
+            current_state_cluster.add_hypervisor(node)
+
+        for i in range(6, 6 + count_vm):
+            vm_uuid = "VM_{0}".format(i)
+            vm = modelvm.VM()
+            vm.uuid = vm_uuid
+            vm.state = vm_state.VMState.ACTIVE
+            mem.set_capacity(vm, 2)
+            disk.set_capacity(vm, 20)
+            num_cores.set_capacity(vm, 2 ** (i-6))
+            current_state_cluster.add_vm(vm)
+
+            current_state_cluster.get_mapping().map(
+                current_state_cluster.get_hypervisor_from_id("Node_0"),
+                current_state_cluster.get_vm_from_id("VM_%s" % str(i)))
 
         return current_state_cluster

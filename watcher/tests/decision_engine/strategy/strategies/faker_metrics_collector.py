@@ -18,6 +18,7 @@
 #
 
 import random
+from watcher.decision_engine.model import resource
 
 
 class FakerMetricsCollector(object):
@@ -171,3 +172,85 @@ class FakerMetricsCollector(object):
 
     def get_average_network_outcomming(self, node):
         pass
+
+
+class FakeCeilometerMetrics:
+    def __init__(self, model):
+        self.model = model
+
+    def mock_get_statistics(self, resource_id, meter_name, period=3600,
+                            aggregate='avg'):
+        if meter_name == "compute.node.cpu.percent":
+            return self.get_hypervisor_cpu_util(resource_id)
+        elif meter_name == "cpu_util":
+            return self.get_vm_cpu_util(resource_id)
+        elif meter_name == "memory.usage":
+            return self.get_vm_ram_util(resource_id)
+        elif meter_name == "disk.root.size":
+            return self.get_vm_disk_root_size(resource_id)
+
+    def get_hypervisor_cpu_util(self, r_id):
+        '''
+        Calculates hypervisor utilization dynamicaly.
+        Hypervisor CPU utilization should consider
+        and corelate with actual VM-hypervisor mappings
+        provided within a cluster model.
+
+        Returns relative hypervisor CPU utilization <0, 100>.
+        '''
+
+        id = '%s_%s' % (r_id.split('_')[0], r_id.split('_')[1])
+        vms = self.model.get_mapping().get_node_vms_from_id(id)
+        util_sum = 0.0
+        hypervisor_cpu_cores = self.model.get_resource_from_id(
+            resource.ResourceType.cpu_cores).get_capacity_from_id(id)
+        for vm_uuid in vms:
+            vm_cpu_cores = self.model.get_resource_from_id(
+                resource.ResourceType.cpu_cores).\
+                get_capacity(self.model.get_vm_from_id(vm_uuid))
+            total_cpu_util = vm_cpu_cores * self.get_vm_cpu_util(vm_uuid)
+            util_sum += total_cpu_util / 100.0
+        util_sum /= hypervisor_cpu_cores
+        return util_sum * 100.0
+
+    def get_vm_cpu_util(self, r_id):
+        vm_cpu_util = dict()
+        vm_cpu_util['VM_0'] = 10
+        vm_cpu_util['VM_1'] = 30
+        vm_cpu_util['VM_2'] = 60
+        vm_cpu_util['VM_3'] = 20
+        vm_cpu_util['VM_4'] = 40
+        vm_cpu_util['VM_5'] = 50
+        vm_cpu_util['VM_6'] = 100
+        vm_cpu_util['VM_7'] = 100
+        vm_cpu_util['VM_8'] = 100
+        vm_cpu_util['VM_9'] = 100
+        return vm_cpu_util[str(r_id)]
+
+    def get_vm_ram_util(self, r_id):
+        vm_ram_util = dict()
+        vm_ram_util['VM_0'] = 1
+        vm_ram_util['VM_1'] = 2
+        vm_ram_util['VM_2'] = 4
+        vm_ram_util['VM_3'] = 8
+        vm_ram_util['VM_4'] = 3
+        vm_ram_util['VM_5'] = 2
+        vm_ram_util['VM_6'] = 1
+        vm_ram_util['VM_7'] = 2
+        vm_ram_util['VM_8'] = 4
+        vm_ram_util['VM_9'] = 8
+        return vm_ram_util[str(r_id)]
+
+    def get_vm_disk_root_size(self, r_id):
+        vm_disk_util = dict()
+        vm_disk_util['VM_0'] = 10
+        vm_disk_util['VM_1'] = 15
+        vm_disk_util['VM_2'] = 30
+        vm_disk_util['VM_3'] = 35
+        vm_disk_util['VM_4'] = 20
+        vm_disk_util['VM_5'] = 25
+        vm_disk_util['VM_6'] = 25
+        vm_disk_util['VM_7'] = 25
+        vm_disk_util['VM_8'] = 25
+        vm_disk_util['VM_9'] = 25
+        return vm_disk_util[str(r_id)]
